@@ -3,6 +3,7 @@
 from __future__ import print_function
 import sys
 import os
+import subprocess
 import argparse
 import numpy as np
 import scipy.interpolate
@@ -74,16 +75,20 @@ if __name__ == '__main__':
     parser.add_argument('--no_trajectory', action='store_true')
     parser.add_argument('--no_magnet', action='store_true')
     parser.add_argument('--no_remove_duplicate', action='store_true')
+    parser.add_argument('--clear_result', action='store_true')
 
     args = parser.parse_args()
 
     dataset_list = []
+    root_dir = ''
     if args.path:
         dataset_list.append(args.path)
     elif args.list:
-        root_dir = os.path.dirname(args.list)
+        root_dir = os.path.dirname(args.list) + '/'
         with open(args.list) as f:
-            dataset_list = [root_dir + '/' + s.strip('\n') for s in f.readlines()]
+            for s in f.readlines():
+                if s[0] is not '#':
+                    dataset_list.append(s.strip('\n'))
     else:
         raise ValueError('No data specified')
 
@@ -101,7 +106,7 @@ if __name__ == '__main__':
         motion_type = 'unknown'
         if len(info) == 2:
             motion_type = info[1]
-        data_root = info[0]
+        data_root = root_dir + info[0]
         length = 0
         if os.path.exists(data_root + '/processed/data.csv') and not args.recompute:
             data_pandas = pandas.read_csv(data_root + '/processed/data.csv')
@@ -230,6 +235,9 @@ if __name__ == '__main__':
         else:
             length_dict[motion_type] += length
         total_length += length
+        if args.clear_result:
+            command = 'rm -r %s/result*' % (data_root)
+            subprocess.call(command, shell=True)
 
     print('All done. Total length: {:.2f}s ({:.2f}min)'.format(total_length, total_length / 60.0))
     for k, v in length_dict.items():
