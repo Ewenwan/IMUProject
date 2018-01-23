@@ -75,8 +75,8 @@ if __name__ == '__main__':
 
     font_config = {'family': 'serif',
                    'size': 18}
-    linew = 8
-    markersize = 5
+    linew = 5
+    markersize = 15
 
     plt.rc('font', **font_config)
     fig = plt.figure('Sparse grid', figsize=(16, 8))
@@ -87,17 +87,17 @@ if __name__ == '__main__':
     bias_end_id = min(bias_ind.shape[0] - 1, bias_end_id + 1)
 
     # First draw the plot for low-frequency bias.
-    for i in range(1):
-        plt.subplot(111 + i * 2, axis_bgcolor='black')
-        plt.ylabel('Acceleration (m/s2)')
-        plt.xlabel('Time (s)')
-        x_min = min(ts[bias_ind[bias_start_id]], ts[glob_start_id]) - 0.1
-        x_max = max(ts[bias_ind[bias_end_id - 1]], ts[glob_end_id]) + 0.1
-        plt.xlim(x_min, x_max)
-        plt.plot(ts[glob_start_id:glob_end_id], linacce[glob_start_id:glob_end_id, i], color='r', lw=linew)
-        plt.plot(ts[glob_start_id:glob_end_id], corrected_linacce[glob_start_id:glob_end_id, i], color='b', lw=linew)
-        plt.plot(ts[bias_ind[bias_start_id:bias_end_id]], bias[bias_ind[bias_start_id:bias_end_id], i],
-                 color=(.5, .8, .0), lw=linew, marker='o', markersize=markersize)
+    # for i in range(1):
+    #     plt.subplot(111 + i * 2, axis_bgcolor='black')
+    #     plt.ylabel('Acceleration (m/s2)')
+    #     plt.xlabel('Time (s)')
+    #     x_min = min(ts[bias_ind[bias_start_id]], ts[glob_start_id]) - 0.1
+    #     x_max = max(ts[bias_ind[bias_end_id - 1]], ts[glob_end_id]) + 0.1
+    #     plt.xlim(x_min, x_max)
+    #     plt.plot(ts[glob_start_id:glob_end_id], linacce[glob_start_id:glob_end_id, i], color=(0, 0.7, 0), lw=linew)
+    #     plt.plot(ts[glob_start_id:glob_end_id], corrected_linacce[glob_start_id:glob_end_id, i], color='b', lw=linew)
+    #     plt.plot(ts[bias_ind[bias_start_id:bias_end_id]], bias[bias_ind[bias_start_id:bias_end_id], i],
+    #              color=(1, 1, .0), lw=linew, marker='o', markersize=markersize)
     # plt.legend(['Sparse bias', 'Raw acceleration', 'Corrected acceleration'], loc='lower left')
 
     # Then draw the plot for velocity constraints.
@@ -108,18 +108,18 @@ if __name__ == '__main__':
     glob_start_id = constraint_ind[con_start_id]
     glob_end_id = constraint_ind[con_end_id]
 
-    # for i in [0]:
-    #     plt.subplot(121 + i * 2 + 1)
-    #     plt.ylabel('Velocity (m/s)')
-    #     plt.xlabel('Time (s)')
-    #     # x_min = min(ts[constraint_ind[con_start_id]], ts[glob_start_id]) - 0.1
-    #     # x_max = max(ts[constraint_ind[con_end_id - 1]], ts[glob_end_id]) + 0.1
-    #     x_min, x_max = 3.9, 5.8
-    #     plt.xlim(x_min, x_max)
-    #     plt.plot(ts[glob_start_id:glob_end_id], speed_raw[glob_start_id:glob_end_id, i], color='r', lw=linew)
-    #     plt.plot(ts[glob_start_id:glob_end_id], speed_corrected[glob_start_id:glob_end_id, i] - 0.05, color='b', lw=linew)
-    #     plt.plot(ts[constraint_ind[con_start_id:con_end_id]], constraint[con_start_id:con_end_id, i], color=(.8, .5, 0),
-    #              lw=linew, marker='^', markersize=markersize)
+    for i in [0]:
+        plt.subplot(111 + i * 2, axis_bgcolor='black')
+        plt.ylabel('Velocity (m/s)')
+        plt.xlabel('Time (s)')
+        # x_min = min(ts[constraint_ind[con_start_id]], ts[glob_start_id]) - 0.1
+        # x_max = max(ts[constraint_ind[con_end_id - 1]], ts[glob_end_id]) + 0.1
+        x_min, x_max = 3.9, 5.8
+        plt.xlim(x_min, x_max)
+        plt.plot(ts[glob_start_id:glob_end_id], speed_raw[glob_start_id:glob_end_id, i], color=(0, 0.7, 0), lw=linew)
+        plt.plot(ts[glob_start_id:glob_end_id], speed_corrected[glob_start_id:glob_end_id, i] - 0.05, color='b', lw=linew)
+        # plt.plot(ts[constraint_ind[con_start_id:con_end_id]], constraint[con_start_id:con_end_id, i], color=(.8, .5, 0),
+        #          lw=linew, marker='^', markersize=markersize)
 
     # plt.subplot(324)
     # plt.ylabel('Velocity (m/s)')

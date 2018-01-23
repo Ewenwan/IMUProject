@@ -116,6 +116,7 @@ void MainWidget::InitializeTrajectories(const std::string &path) {
 
   const int start_portion_length = std::min(500, static_cast<int>(gt_position.size() - 1));
   Eigen::Quaterniond global_rotation = Eigen::Quaterniond::Identity();
+
   if (is_gt_valid){
     Eigen::Quaterniond imu_to_tango = gt_orientation[0] * imu_orientation[0].conjugate();
     Eigen::Vector3d init_offset = gt_position[start_portion_length] - gt_position[0];
@@ -130,6 +131,19 @@ void MainWidget::InitializeTrajectories(const std::string &path) {
   for (auto &ori: imu_orientation) {
     ori = init_orientation * ori;
   }
+
+//  {
+//    sprintf(buffer, "%s/result_raw/result_raw.csv", path.c_str());
+//    std::vector<Eigen::Vector3d> traj;
+//    if (ReadResult(buffer, frame_interval_, &traj)){
+//      if (!is_gt_valid){
+//        Eigen::Vector3d init_offset = traj[start_portion_length] - traj[0];
+//        init_offset[2] = 0;
+//        global_rotation = Eigen::Quaterniond::FromTwoVectors(init_offset, Eigen::Vector3d(0, 1, 0));
+//      }
+//      add_trajectory(traj, imu_orientation, ori_traj_color, 1.0f, global_rotation);
+//    }
+//  }
 
   {
     sprintf(buffer, "%s/result_full/result_full.csv", path.c_str());

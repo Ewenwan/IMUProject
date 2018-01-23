@@ -125,89 +125,94 @@ int main(int argc, char **argv) {
     LOG(INFO) << "Creating folder: " << result_dir_path;
     CHECK(stlplus::folder_create(result_dir_path)) << "Can not create folder " << result_dir_path << " for output.";
   }
+
+  std::vector<Eigen::Vector3d> output_positions;
+  std::vector<Eigen::Vector3d> output_speed;
+  std::vector<Eigen::Vector3d> output_linacce;
+  std::vector<Eigen::Vector3d> output_bias(dataset.GetTimeStamp().size(), Eigen::Vector3d(0, 0, 0));
+
   if (FLAGS_preset == "raw"){
     // Write trajectory with double integration
-    vector<Eigen::Vector3d> raw_traj(dataset.GetTimeStamp().size(), dataset.GetPosition()[0]);
-    vector<Eigen::Vector3d> raw_speed(dataset.GetTimeStamp().size(), Eigen::Vector3d(0, 0, 0));
-    for (auto i = 1; i < raw_traj.size(); ++i) {
+    output_positions.resize(dataset.GetTimeStamp().size(), dataset.GetPosition()[0]);
+    output_speed.resize(dataset.GetTimeStamp().size(), Eigen::Vector3d(0, 0, 0));
+    output_linacce = dataset.GetLinearAcceleration();
+
+    for (auto i = 1; i < output_positions.size(); ++i) {
       Eigen::Vector3d acce = orientation[i - 1] * dataset.GetLinearAcceleration()[i - 1];
-      raw_speed[i] = raw_speed[i - 1] + acce * (ts[i] - ts[i - 1]);
-      raw_traj[i] = raw_traj[i - 1] + raw_speed[i - 1] * (ts[i] - ts[i - 1]);
-      raw_traj[i][2] = 0;
+      output_speed[i] = output_speed[i - 1] + acce * (ts[i] - ts[i - 1]);
+      output_positions[i] = output_positions[i - 1] + output_speed[i - 1] * (ts[i] - ts[i - 1]);
+      output_positions[i][2] = 0;
     }
-    sprintf(buffer, "%s/result_raw.ply", result_dir_path);
-    IMUProject::WriteToPly(std::string(buffer), ts.data(), raw_traj.data(), orientation.data(),
-                           (int) raw_traj.size(), true, traj_color, 0);
+  } else {
+    // load regressor
+    std::unique_ptr<IMUProject::ModelWrapper> model(new IMUProject::SVRCascade(FLAGS_model_path));
+    LOG(INFO) << "Model " << FLAGS_model_path << " loaded";
 
-    sprintf(buffer, "%s/result_raw.csv", result_dir_path);
-    ofstream raw_out(buffer);
-    CHECK(raw_out.is_open());
-    raw_out << ",time,pos_x,pos_y,pos_z,speed_x,speed_y,speed_z,bias_x,bias_y,bias_z" << endl;
-    for (auto i = 0; i < raw_traj.size(); ++i) {
-      const Eigen::Vector3d &pos = raw_traj[i];
-      const Eigen::Vector3d &acce = dataset.GetLinearAcceleration()[i];
-      const Eigen::Vector3d &spd = raw_speed[i];
-      sprintf(buffer, "%d,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f\n",
-              i, dataset.GetTimeStamp()[i], pos[0], pos[1], pos[2], spd[0], spd[1], spd[2],
-              acce[0] - linacce[i][0], acce[1] - linacce[i][1], acce[2] - linacce[i][2]);
-      raw_out << buffer;
-    }
-  }
+    IMUProject::TrainingDataOption td_option;
+    IMUProject::IMUTrajectory trajectory(loc_option, td_option, Eigen::Vector3d(0, 0, 0),
+                                         dataset.GetPosition()[0], model.get());
 
-  // load regressor
-  std::unique_ptr<IMUProject::ModelWrapper> model(new IMUProject::SVRCascade(FLAGS_model_path));
-  LOG(INFO) << "Model " << FLAGS_model_path << " loaded";
+    float start_t = (float) cv::getTickCount();
 
-  IMUProject::TrainingDataOption td_option;
-  IMUProject::IMUTrajectory trajectory(loc_option, td_option, Eigen::Vector3d(0, 0, 0),
-                                       dataset.GetPosition()[0], model.get());
+    constexpr int init_capacity = 20000;
 
-  float start_t = (float) cv::getTickCount();
-
-  constexpr int init_capacity = 20000;
-
-  printf("Start adding records...\n");
-  for (int i = 0; i < N; ++i) {
-    trajectory.AddRecord(ts[i], gyro[i], linacce[i], gravity[i], orientation[i]);
-    if (i > loc_option.local_opt_window) {
-      if (i % loc_option.local_opt_interval == 0) {
-        LOG(INFO) << "Running local optimzation at frame " << i;
-        while (true) {
-          if (trajectory.CanAdd()) {
-            break;
+    printf("Start adding records...\n");
+    for (int i = 0; i < N; ++i) {
+      trajectory.AddRecord(ts[i], gyro[i], linacce[i], gravity[i], orientation[i]);
+      if (i > loc_option.local_opt_window) {
+        if (i % loc_option.local_opt_interval == 0) {
+          LOG(INFO) << "Running local optimzation at frame " << i;
+          while (true) {
+            if (trajectory.CanAdd()) {
+              break;
+            }
           }
+          trajectory.ScheduleOptimization(i - loc_option.local_opt_window, loc_option.local_opt_window);
         }
-        trajectory.ScheduleOptimization(i - loc_option.local_opt_window, loc_option.local_opt_window);
       }
+      if (FLAGS_log_interval > 0 && i > 0 && i % FLAGS_log_interval == 0) {
+        const float time_passage = std::max(((float) cv::getTickCount() - start_t) / (float) cv::getTickFrequency(),
+                                            std::numeric_limits<float>::epsilon());
+        sprintf(buffer, "%d records added in %.5fs, fps=%.2fHz\n", i, time_passage, (float) i / time_passage);
+        LOG(INFO) << buffer;
+      }
+
     }
-    if (FLAGS_log_interval > 0 && i > 0 && i % FLAGS_log_interval == 0) {
-      const float time_passage = std::max(((float) cv::getTickCount() - start_t) / (float) cv::getTickFrequency(),
-                                          std::numeric_limits<float>::epsilon());
-      sprintf(buffer, "%d records added in %.5fs, fps=%.2fHz\n", i, time_passage, (float) i / time_passage);
-      LOG(INFO) << buffer;
+    trajectory.EndTrajectory();
+    if (FLAGS_run_global) {
+      printf("Running global optimization on the whole sequence...\n");
+      trajectory.RunOptimization(0, trajectory.GetNumFrames());
     }
+    printf("All done. Number of points on trajectory: %d\n", trajectory.GetNumFrames());
+    const auto total_time = ((float) cv::getTickCount() - start_t) / (float) cv::getTickFrequency();
+    const float fps_all = (float) trajectory.GetNumFrames() / total_time;
+    printf("Time usage: %.3fs. Overall framerate: %.3f\n", total_time, fps_all);
+    const std::vector<float> &time_regression = trajectory.GetRegressionTimes();
+    const std::vector<float> &time_optimization = trajectory.GetOptimizationTimes();
+    printf("%d regressions executed; %d optimization executed.\n", static_cast<int>(time_regression.size()),
+           static_cast<int>(time_optimization.size()));
+    printf("Average time for regression: %.3f, average time for optimization: %.3f\n",
+           std::accumulate(time_regression.begin(), time_regression.end(), 0.0f) / time_regression.size(),
+           std::accumulate(time_optimization.begin(), time_optimization.end(), 0.0f) / time_optimization.size());
 
+    output_positions = trajectory.GetPositions();
+    output_speed = trajectory.GetSpeed();
+    output_linacce = trajectory.GetLinearAcceleration();
+
+    sprintf(buffer, "%s/regression_%s.txt", result_dir_path, FLAGS_suffix.c_str());
+    ofstream reg_out(buffer);
+    const std::vector<int> &cids = trajectory.GetConstraintInd();
+    const std::vector<Eigen::Vector3d> &lss = trajectory.GetLocalSpeed();
+    const std::vector<int>& labels = trajectory.GetLabels();
+    const std::vector<int>& trans_counts = trajectory.GetTransitionCounts();
+    for (auto i = 0; i < cids.size(); ++i) {
+      reg_out << cids[i] << ' ' << lss[i][0] << ' ' << lss[i][1] << ' ' << lss[i][2] << ' ' << labels[i] << ' '
+              << trans_counts[i] << endl;
+    }
   }
-  trajectory.EndTrajectory();
-  if (FLAGS_run_global) {
-    printf("Running global optimization on the whole sequence...\n");
-    trajectory.RunOptimization(0, trajectory.GetNumFrames());
-  }
 
-  printf("All done. Number of points on trajectory: %d\n", trajectory.GetNumFrames());
-  const auto total_time = ((float) cv::getTickCount() - start_t) / (float) cv::getTickFrequency();
-  const float fps_all = (float) trajectory.GetNumFrames() / total_time;
-  printf("Time usage: %.3fs. Overall framerate: %.3f\n", total_time, fps_all);
-  const std::vector<float>& time_regression = trajectory.GetRegressionTimes();
-  const std::vector<float>& time_optimization = trajectory.GetOptimizationTimes();
-  printf("%d regressions executed; %d optimization executed.\n", static_cast<int>(time_regression.size()),
-         static_cast<int>(time_optimization.size()));
-  printf("Average time for regression: %.3f, average time for optimization: %.3f\n",
-         std::accumulate(time_regression.begin(), time_regression.end(), 0.0f) / time_regression.size(),
-         std::accumulate(time_optimization.begin(), time_optimization.end(), 0.0f) / time_optimization.size());
-
-  std::vector<Eigen::Vector3d> output_positions = trajectory.GetPositions();
-  std::vector<Eigen::Quaterniond> output_orientation = trajectory.GetOrientations();
+  // Register with the ground truth (if applicable).
+  std::vector<Eigen::Quaterniond> output_orientation = orientation;
   const std::vector<Eigen::Vector3d> &gt_positions = dataset.GetPosition();
   Eigen::Vector3d sum_gt_position = std::accumulate(gt_positions.begin(), gt_positions.end(),
 						    Eigen::Vector3d(0, 0, 0));
@@ -255,20 +260,19 @@ int main(int argc, char **argv) {
         output_orientation[i] = rotation_2d_as_3d * output_orientation[i];
       }
     }
+
+
   }
 
-
-
+  const int kFrames = output_positions.size();
   sprintf(buffer, "%s/result_trajectory_%s.ply", result_dir_path, FLAGS_suffix.c_str());
   IMUProject::WriteToPly(std::string(buffer), dataset.GetTimeStamp().data(), output_positions.data(),
-                         output_orientation.data(), trajectory.GetNumFrames(),
-                         false, traj_color, 0);
+                         output_orientation.data(), kFrames, false, traj_color, 0);
 
   sprintf(buffer, "%s/tango_trajectory.ply", result_dir_path);
   IMUProject::WriteToPly(std::string(buffer), dataset.GetTimeStamp().data(), dataset.GetPosition().data(),
                          dataset.GetOrientation().data(), (int) dataset.GetPosition().size(),
                          false, Eigen::Vector3d(255, 0, 0), 0.0);
-
 
   {
     // Write the trajectory and bias as txt
@@ -276,25 +280,14 @@ int main(int argc, char **argv) {
     ofstream traj_out(buffer);
     CHECK(traj_out.is_open());
     traj_out << ",time,pos_x,pos_y,pos_z,speed_x,speed_y,speed_z,bias_x,bias_y,bias_z" << endl;
-    for (auto i = 0; i < trajectory.GetNumFrames(); ++i) {
+    for (auto i = 0; i < kFrames; ++i) {
       const Eigen::Vector3d &pos = output_positions[i];
-      const Eigen::Vector3d &acce = trajectory.GetLinearAcceleration()[i];
-      const Eigen::Vector3d &spd = trajectory.GetSpeed()[i];
+      const Eigen::Vector3d &acce = output_linacce[i];
+      const Eigen::Vector3d &spd = output_speed[i];
       sprintf(buffer, "%d,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f\n",
               i, dataset.GetTimeStamp()[i], pos[0], pos[1], pos[2], spd[0], spd[1], spd[2],
               acce[0] - linacce[i][0], acce[1] - linacce[i][1], acce[2] - linacce[i][2]);
       traj_out << buffer;
-    }
-
-    sprintf(buffer, "%s/regression_%s.txt", result_dir_path, FLAGS_suffix.c_str());
-    ofstream reg_out(buffer);
-    const std::vector<int> &cids = trajectory.GetConstraintInd();
-    const std::vector<Eigen::Vector3d> &lss = trajectory.GetLocalSpeed();
-    const std::vector<int>& labels = trajectory.GetLabels();
-    const std::vector<int>& trans_counts = trajectory.GetTransitionCounts();
-    for (auto i = 0; i < cids.size(); ++i) {
-      reg_out << cids[i] << ' ' << lss[i][0] << ' ' << lss[i][1] << ' ' << lss[i][2] << ' ' << labels[i] << ' '
-              << trans_counts[i] << endl;
     }
   }
 
