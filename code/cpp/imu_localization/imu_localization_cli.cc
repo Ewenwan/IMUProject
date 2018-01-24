@@ -272,23 +272,23 @@ int main(int argc, char **argv) {
   sprintf(buffer, "%s/tango_trajectory.ply", result_dir_path);
   IMUProject::WriteToPly(std::string(buffer), dataset.GetTimeStamp().data(), dataset.GetPosition().data(),
                          dataset.GetOrientation().data(), (int) dataset.GetPosition().size(),
-                         false, Eigen::Vector3d(255, 0, 0), 0.0);
+                         false, Eigen::Vector3d(255, 0, 0), 0.8, 100, 300);
 
   {
-    // Write the trajectory and bias as txt
-    sprintf(buffer, "%s/result_%s.csv", result_dir_path, FLAGS_suffix.c_str());
-    ofstream traj_out(buffer);
-    CHECK(traj_out.is_open());
-    traj_out << ",time,pos_x,pos_y,pos_z,speed_x,speed_y,speed_z,bias_x,bias_y,bias_z" << endl;
-    for (auto i = 0; i < kFrames; ++i) {
-      const Eigen::Vector3d &pos = output_positions[i];
-      const Eigen::Vector3d &acce = output_linacce[i];
-      const Eigen::Vector3d &spd = output_speed[i];
-      sprintf(buffer, "%d,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f\n",
-              i, dataset.GetTimeStamp()[i], pos[0], pos[1], pos[2], spd[0], spd[1], spd[2],
-              acce[0] - linacce[i][0], acce[1] - linacce[i][1], acce[2] - linacce[i][2]);
-      traj_out << buffer;
-    }
+    // // Write the trajectory and bias as txt
+    // sprintf(buffer, "%s/result_%s.csv", result_dir_path, FLAGS_suffix.c_str());
+    // ofstream traj_out(buffer);
+    // CHECK(traj_out.is_open());
+    // traj_out << ",time,pos_x,pos_y,pos_z,speed_x,speed_y,speed_z,bias_x,bias_y,bias_z" << endl;
+    // for (auto i = 0; i < kFrames; ++i) {
+    //   const Eigen::Vector3d &pos = output_positions[i];
+    //   const Eigen::Vector3d &acce = output_linacce[i];
+    //   const Eigen::Vector3d &spd = output_speed[i];
+    //   sprintf(buffer, "%d,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f\n",
+    //           i, dataset.GetTimeStamp()[i], pos[0], pos[1], pos[2], spd[0], spd[1], spd[2],
+    //           acce[0] - linacce[i][0], acce[1] - linacce[i][1], acce[2] - linacce[i][2]);
+    //   traj_out << buffer;
+    // }
   }
 
   if (FLAGS_mapinfo_path == "default") {
