@@ -1,6 +1,5 @@
 #pylint: disable=C0103,C0111,C0301
 
-from __future__ import print_function
 import sys
 import os
 import subprocess
@@ -11,25 +10,20 @@ import quaternion
 import quaternion.quaternion_time_series
 import pandas
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/..')
-from algorithms import geometry
 from utility.write_trajectory_to_ply import write_ply_to_file
 
 
-def interpolate_quaternion_spline(gyro_data, input_timestamp, output_timestamp):
-    # convert angular velocity to quaternion
-    assert gyro_data.shape[1] == 4
-    n_input = gyro_data.shape[0]
-    assert input_timestamp.shape[0] == n_input
-    gyro_quat = np.empty([n_input, 4], dtype=float)
-
-    for i in range(n_input):
-        gyro_quat[i] = quaternion.as_float_array(quaternion.from_euler_angles(*gyro_data[i]))
-    gyro_interpolated = quaternion.quaternion_time_series.squad(quaternion.as_quat_array(gyro_quat),
-                                                                gyro_data[:, 0], output_timestamp)
-    return np.concatenate([output_timestamp[:, np.newaxis], quaternion.as_float_array(gyro_interpolated)], axis=1)
-
-
 def interpolate_quaternion_linear(quat_data, input_timestamp, output_timestamp):
+    """
+    This function interpolate the input quaternion array into another time stemp.
+    
+    Args:
+        quat_data: Nx4 array containing N quaternions.
+        input_timestamp: N-sized array containing time stamps for each of the input quaternion.
+        output_timestamp: M-sized array containing output time stamps.
+    Return:
+        quat_inter: Mx4 array containing M quaternions.
+    """
     n_input = quat_data.shape[0]
     assert input_timestamp.shape[0] == n_input
     assert quat_data.shape[1] == 4
@@ -59,6 +53,16 @@ def interpolate_quaternion_linear(quat_data, input_timestamp, output_timestamp):
 
 
 def interpolate_3dvector_linear(input, input_timestamp, output_timestamp):
+    """
+    This function interpolate n-d vectors (despite the '3d' in the function name) into the output time stamps.
+    
+    Args:
+        input: Nxd array containing N d-dimensional vectors.
+        input_timestamp: N-sized array containing time stamps for each of the input quaternion.
+        output_timestamp: M-sized array containing output time stamps.
+    Return:
+        quat_inter: Mxd array containing M vectors.
+    """
     assert input.shape[0] == input_timestamp.shape[0]
     func = scipy.interpolate.interp1d(input_timestamp, input, axis=0)
     interpolated = func(output_timestamp)
@@ -67,13 +71,17 @@ def interpolate_3dvector_linear(input, input_timestamp, output_timestamp):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--list', type=str, default=None)
-    parser.add_argument('--path', type=str, default=None)
-    parser.add_argument('--skip_front', type=int, default=800)
-    parser.add_argument('--skip_end', type=int, default=800)
-    parser.add_argument('--recompute', action='store_true')
-    parser.add_argument('--no_trajectory', action='store_true')
-    parser.add_argument('--no_magnet', action='store_true')
+    parser.add_argument('--list', type=str, default=None, help='Path to a list file.')
+    parser.add_argument('--path', type=str, default=None, help='Path to a dataset folder.')
+    parser.add_argument('--skip_front', type=int, default=800, help='Number of discarded records at beginning.')
+    parser.add_argument('--skip_end', type=int, default=800, help='Numbef of discarded records at end')
+    parser.add_argument('--recompute', action='store_true',
+                        help='When set, the previously computed results will be over-written.')
+    parser.add_argument('--no_trajectory', action='store_true',
+                        help='When set, no ply files will be written.')
+    parser.add_argument('--no_magnet', action='store_true',
+                        help='If set to true, Magnetometer data will not be processed. This is to deal with'
+                             'occasion magnet data corruption.')
     parser.add_argument('--no_remove_duplicate', action='store_true')
     parser.add_argument('--clear_result', action='store_true')
 
@@ -169,11 +177,6 @@ if __name__ == '__main__':
             if not args.no_magnet:
                 output_magnet_linear = interpolate_3dvector_linear(magnet_data[:, 1:], magnet_data[:, 0],
                                                                    output_timestamp)
-            # convert gyro, accelerometer and linear acceleration to stablized IMU frame
-            # gyro_stab = geometry.align_eular_rotation_with_gravity(output_gyro_linear, output_gravity_linear)
-            # acce_stab = geometry.align_3dvector_with_gravity(output_accelerometer_linear, output_gravity_linear)
-            # linacce_stab = geometry.align_3dvector_with_gravity(output_linacce_linear, output_gravity_linear)
-
             # swap from x,y,z,w to w,x,y,z
             orientation_data[:, [1, 2, 3, 4]] = orientation_data[:, [4, 1, 2, 3]]
             # Convert rotation vector to quaternion
