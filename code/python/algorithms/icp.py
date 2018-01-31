@@ -1,8 +1,16 @@
 import numpy as np
-from sklearn.neighbors import NearestNeighbors
 
 
 def fit_transformation(source, target):
+    """
+    This function computes the best rigid transformation between two point sets. It assumes that "source" and
+    "target" are with the same length and "source[i]" corresponds to "target[i]".
+    
+    :param source: Nxd array. 
+    :param target: Nxd array.
+    :return: A transformation as (d+1)x(d+1) matrix; the rotation part as a dxd matrix and the translation
+    part as a dx1 vector.
+    """
     assert source.shape == target.shape
     center_source = np.mean(source, axis=0)
     center_target = np.mean(target, axis=0)
@@ -21,15 +29,3 @@ def fit_transformation(source, target):
     T[:m, :m] = R
     T[:m, m] = t
     return T, R, t
-
-
-def nearest_neightbor(source, target):
-    assert source.shape == target.shape
-    neighbor_finder = NearestNeighbors(n_neighbors=1)
-    neighbor_finder.fit(target)
-    distances, indices = neighbor_finder.kneighbors(source, return_distance=True)
-    return distances.ravel(), indices.ravel()
-
-
-def icp(source, target, max_iter = 100, tol=0.001):
-    pass

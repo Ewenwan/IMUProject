@@ -16,11 +16,19 @@ sys.path.append('/Users/yanhang/Documents/research/IMUProject/code/python')
 import speed_regression.training_data as td
 
 
+# The following class will be ignored. Not used.
 ignore_class = 'transition'
 
+
 class SVMOption:
+    """
+    This class represents options necessary for creating a SVM mode. The script relies on the ML module of OpenCV.
+    Please refer to the OpenCV documentation for the meaning of each term:
+    https://docs.opencv.org/3.2.0/d1/d2d/classcv_1_1ml_1_1SVM.html
+    """
     def __init__(self, svm_type=cv2.ml.SVM_C_SVC, kernel_type=cv2.ml.SVM_RBF, degree=1,
                  gamma=1, C=5, e=0.01, max_iter=10000):
+        # 'SVM' for classification or 'SVR' for regression
         self.svm_type = svm_type
         self.kernel_type = kernel_type
         self.degree = degree
@@ -65,6 +73,11 @@ class SVMOption:
 
 
 def create_svm(svm_options):
+    """
+    Create an instance of SVM with svm_options.
+    :param svm_options: SVM options.
+    :return: An instance of OpenCV SVM model.
+    """
     svm = cv2.ml.SVM_create()
     svm.setType(svm_options.svm_type)
     svm.setKernel(svm_options.kernel_type)
@@ -78,9 +91,10 @@ def create_svm(svm_options):
 
 class SVRCascadeOption:
     """
-    This structure represents the options for SVR cascading model.
+    This class represents the options for SVR cascading model.
     """
     def __init__(self, num_classes=1, num_channels=1, svm_option=None, svr_options=None):
+        # Number of classes and channels. There will be num_classes * num_channels regressors.
         self.num_classes = num_classes
         self.num_channels = num_channels
         if svm_option is None:
@@ -119,6 +133,9 @@ class SVRCascadeOption:
 
 
 class SVRCascade:
+    """
+    The cascaded model consists of a SVM classifier and num_classes * num_channels SVR regressors.
+    """
     def __init__(self, options, class_map):
         self.num_classes = options.num_classes
         self.num_channels = options.num_channels
@@ -129,6 +146,15 @@ class SVRCascade:
         self.class_map = class_map
 
     def train(self, train_feature, train_label, train_response):
+        """
+        Train the cascade model. It first trains the classifier with train_feature and train_label. Then the
+        training samples are split into num_classes groups based on train_label. Regressors are trained for each
+        group and each channel.
+        :param train_feature: Nxd array containing N training feature vectors.
+        :param train_label: Nx1 integer array containing N training labels.
+        :param train_response: Nxc array where c equals to num_channels.
+        :return: None
+        """
         assert train_response.shape[1] == self.num_channels
         train_feature_cv = train_feature.astype(np.float32)
         if self.num_classes > 1:
@@ -137,6 +163,7 @@ class SVRCascade:
             predicted_train = self.classifier.predict(train_feature_cv)[1].ravel()
             error_svm = accuracy_score(train_label, predicted_train)
             print('Classifier trained. Training accuracy: %f' % error_svm)
+        # Split the training sample based on ground truth label.
         for cls_name, cls in self.class_map.items():
             feature_in_class = train_feature_cv[train_label == cls, :]
             target_in_class = train_response[train_label == cls, :]
@@ -155,6 +182,13 @@ class SVRCascade:
         print('All done')
 
     def test(self, test_feature, true_label=None, true_responses=None):
+        """
+        Predict the label and responses of given samples.
+        :param test_feature: Nxd array containing N testing feature vectors.
+        :param true_label: Optional. Nx1 integer array containing N ground truth label.
+        :param true_responses: Optional. Nxc array containing N ground truth responses.
+        :return: predicted label and responses.
+        """
         feature_cv = test_feature.astype(np.float32)
         labels = np.zeros(feature_cv.shape[0])
         if self.num_classes > 1:
@@ -182,7 +216,6 @@ class SVRCascade:
                 if true_in_class.shape[0] == 0:
                     continue
                 for chn in range(self.num_channels):
-                    # r2 = r2_score(true_in_class[:, chn], predicted_class[cls][:, chn])
                     mse = mean_squared_error(true_in_class[:, chn], predicted_class[cls][:, chn])
                     print('Error for class %d, channel %d: %f(MSE)' % (cls, chn, mse))
         predicted_all = np.empty([test_feature.shape[0], self.num_channels])
@@ -239,27 +272,28 @@ def load_model_from_file(path, suffix=''):
     return model
 
 
-def get_best_option(train_feature, train_label, class_map, train_response, svm_search_dict=None, svr_search_dict=None,
+def get_best_option(train_feature, train_label, class_map, train_response, svr_search_dict=None,
                     n_split=3, n_jobs=6, verbose=3):
-    if svm_search_dict is None:
-        svm_search_dict = {'C': [10.0]}
-
+    """
+    Perform grid search for best parameters with cross-validation. Please refer to:
+    http://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GridSearchCV.html
+    
+    :param train_feature: Nxd array of feature vectors.
+    :param train_label: Nx1 array of training labels.
+    :param class_map: a dictionary represents the class map.
+    :param train_response: Nxc array of training responses.
+    :param svr_search_dict: a dictionary represents the searching grid.
+    :param n_split: Number of splits.
+    :param n_jobs: Number of parallel jobs.
+    :param verbose: Controls the amount of information printed.
+    :return: 
+    """
     svm_option = SVMOption()
     svm_option.svm_type = cv2.ml.SVM_C_SVC
     svm_option.kernel_type = cv2.ml.SVM_RBF
     svm_option.C = 10.0
     svm_option.gamma = 1. / train_feature.shape[1]
 
-    # if len(class_map) > 1:
-    #     # First find best parameters for the classifier
-    #     svm_grid_searcher = GridSearchCV(svm.SVC(), svm_search_dict, cv=n_split, n_jobs=n_jobs, verbose=verbose)
-    #     svm_grid_searcher.fit(train_feature, train_label)
-    #     svm_best_param = svm_grid_searcher.best_params_
-    #     print('SVM fitted. Optimal parameters: ', svm_best_param)
-    #     svm_option.svm_type = cv2.ml.SVM_C_SVC
-    #     svm_option.kernel_type = cv2.ml.SVM_RBF
-    #     svm_option.C = svm_best_param['C']
-    #     svm_option.gamma = 1. / train_feature.shape[1]
     if svr_search_dict is None:
         svr_search_dict = {'C': [1.0, 10.0],
                            'epsilon': [0.001, 0.01]}
@@ -286,6 +320,15 @@ def get_best_option(train_feature, train_label, class_map, train_response, svm_s
 
 
 def load_datalist(path, option, class_map=None):
+    """
+    Load a list of dataset. All lines starting with '#' will be ignored. Each line of the list file contains the
+    folder path w.r.t the list file and the device placement.
+    
+    :param path: path to the list file.
+    :param option: An instant of td.TrainingDataOption.
+    :param class_map: a dictionary represents the class map. If None, the class map will be built.
+    :return: Nxd array of feature vectors, Nx1 integer array of labels, Nxc of responses and the class map.
+    """
     root_dir = os.path.dirname(path)
     with open(path) as f:
         dataset_list = [s.strip('\n') for s in f.readlines()]
@@ -336,13 +379,17 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--list', default=None)
-    parser.add_argument('--train_test_path', default=None)
-    parser.add_argument('--output_path', default=None, type=str)
-    parser.add_argument('--subsample', default=1, type=int)
-    parser.add_argument('--step_size', default=10, type=int)
+    parser.add_argument('--train_test_path', default=None, help='If set, the computed feature vectors, labels and'
+                                                                'responses will be cached.')
+    parser.add_argument('--output_path', default=None, type=str, help='The path where learned model is written.')
+    parser.add_argument('--subsample', default=1, type=int, help='If greater than 1, the training set will be'
+                                                                 'down-sampled.')
+    parser.add_argument('--step_size', default=10, type=int, help='Number of frame between two feature extractions.')
     parser.add_argument('--train_ratio', default=0.99999, type=float)
-    parser.add_argument('--cv', default=3, type=int)
-    parser.add_argument('--option', default=None, type=str)
+    parser.add_argument('--cv', default=3, type=int, help='Number of folds during cross-valication.')
+    parser.add_argument('--option', default=None, type=str, help='(Optional) The path to a file containing the '
+                                                                 'hyperparameters. If not provided, a grid search'
+                                                                 ' will be performed to obtain the best hyperparameter.')
     args = parser.parse_args()
 
     load_from_list = True
