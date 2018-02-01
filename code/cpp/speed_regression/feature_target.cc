@@ -16,7 +16,6 @@ cv::Mat ComputeLocalSpeedTarget(const std::vector<double> &time_stamp,
                                 const std::vector<Eigen::Quaterniond> &orientation,
                                 const std::vector<int> &sample_points,
                                 const double sigma) {
-  LOG(ERROR) << "The C++ code is only for testing. This function shouldn't be called.";
   const auto N = (int) time_stamp.size();
   CHECK_EQ(position.size(), N);
   CHECK_EQ(orientation.size(), N);

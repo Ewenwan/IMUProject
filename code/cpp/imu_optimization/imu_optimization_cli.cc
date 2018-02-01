@@ -1,6 +1,13 @@
 //
 // Created by yanhang on 2/6/17.
 //
+
+/*
+  This code performs testing and optimization in the offline fashion. That means only
+  one optimization will be executed for the entire trajectory.
+  The training is done by the python code. Please refer to
+  code/python/regression_cascade.py
+*/
 #include <vector>
 #include <string>
 #include <memory>
@@ -23,7 +30,7 @@ using namespace std;
 
 DEFINE_int32(max_iter, 500, "maximum iteration");
 DEFINE_int32(window, 200, "Window size");
-DEFINE_string(model_path, "../../../../models/svr_cascade1116_2", "Path to models");
+DEFINE_string(model_path, "", "Path to models");
 DEFINE_bool(gt, false, "Use ground truth");
 DEFINE_bool(rv, false, "Use rotation vector");
 DEFINE_double(feature_smooth_sigma, 2.0, "Sigma for feature smoothing.");
@@ -31,8 +38,11 @@ DEFINE_double(target_smooth_sigma, 30.0, "Sigma for target smoothing.");
 DEFINE_double(weight_ls, 1.0, "The weight of local speed residual");
 DEFINE_double(weight_vs, 1.0, "The weight of vertical speed residual");
 
+// Pre-defined the grid parameter.
 struct Config {
+  // Number of regressions.
   static constexpr int kConstriantPoints = 200;
+  // Number of frames where variables are defined..
   static constexpr int kSparsePoints = 200;
 };
 
@@ -52,10 +62,7 @@ int main(int argc, char **argv) {
   IMUProject::IMUDataset dataset(argv[1]);
 
   const int kTotalCount = (int) dataset.GetTimeStamp().size();
-//    const int kTotalCount = 3000;
 
-
-  printf("Total count: %d\n", kTotalCount);
   const std::vector<double>& ts = dataset.GetTimeStamp();
   const std::vector<Eigen::Vector3d>& gyro = dataset.GetGyro();
   const std::vector<Eigen::Vector3d>& linacce = dataset.GetLinearAcceleration();
@@ -76,6 +83,7 @@ int main(int argc, char **argv) {
                                                   dataset.GetOrientation().begin() + kTotalCount);
   }
 
+  // The rotation from stabilized-IMU frame to the world frame.
   std::vector<Eigen::Quaterniond> R_GW((size_t) kTotalCount);
   const Eigen::Vector3d local_g_dir(0, 1, 0);
   for (auto i = 0; i < kTotalCount; ++i) {
@@ -83,7 +91,7 @@ int main(int argc, char **argv) {
     R_GW[i] = rotor * orientation[i].conjugate();
   }
 
-  // Load constraints
+  // Indices of frames where regression will be performed.
   std::vector<int> constraint_ind;
   // TODO(yanhang): Change "local_speed" to "local_speed_gravity" or "target_value" to avoid confusion.
   std::vector<Eigen::Vector3d> local_speed;
