@@ -17,6 +17,7 @@ import speed_regression.training_data as td
 
 
 ignore_class = 'transition'
+args = None
 
 class SVMOption:
     def __init__(self, svm_type=cv2.ml.SVM_C_SVC, kernel_type=cv2.ml.SVM_RBF, degree=1,
@@ -337,6 +338,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--list', default=None)
     parser.add_argument('--train_test_path', default=None)
+    parser.add_argument('--target', default='local_speed_gravity')
+    parser.add_argument('--target_smooth_sigma', default=30.0)
     parser.add_argument('--output_path', default=None, type=str)
     parser.add_argument('--subsample', default=1, type=int)
     parser.add_argument('--step_size', default=10, type=int)
@@ -371,9 +374,10 @@ if __name__ == '__main__':
             data_loaded = True
     if load_from_list and args.list:
         option = td.TrainingDataOption()
+        option.target_ = args.target
         option.sample_step_ = args.step_size
         feature_all, label_all, responses_all, class_map = load_datalist(path=args.list, option=option)
-        responses_all = responses_all[:, [0, 2]]
+        # responses_all = responses_all[:, [0, 2]]
 
         print('Data loaded. Total number of samples: ', feature_all.shape[0])
 

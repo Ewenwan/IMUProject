@@ -114,6 +114,28 @@ def compute_local_speed_with_gravity(time_stamp, position, orientation, gravity,
     return local_speed
 
 
+def compute_acceleration_bias_with_gravity(time_stamp, positions, linacce, gravity,
+                                           sample_points=None, local_gravity=np.array([0., 1., 0.])):
+    if sample_points is None:
+        sample_points = np.arange(0, time_stamp.shape[0], dtype=int)
+    sample_points[-1] = min(sample_points[-1], time_stamp.shape[0] - 2)
+
+    dt = time_stamp[1:] - time_stamp[:-1]
+    if dt.ndim == 1:
+        dt = dt[:, None]
+
+    speed = (positions[1:] - positions[:-1]) / dt
+    speed = np.concatenate([np.zeros([1, 3]), speed], axis=0)
+    acce = (speed[1:] - speed[:-1]) / dt
+    acce = np.concatenate([np.zeros([1, 3]), acce], axis=0)
+    # Double differentiation introduces large noises. We pre-filter the linear acceleration with sigma=10
+    pre_filter_sigma = 10.0
+    acce = gaussian_filter1d(acce, sigma=pre_filter_sigma, axis=0)
+    acce_grav = geometry.align_3dvector_with_gravity(acce, gravity, local_gravity)
+    linacce_grav = geometry.align_3dvector_with_gravity(linacce, gravity, local_gravity)
+    return acce_grav[sample_points] - linacce_grav[sample_points]
+
+
 def compute_delta_angle(time_stamp, position, orientation, sample_points=None,
                         local_axis=quaternion.quaternion(1.0, 0., 0., -1.)):
     """
@@ -165,6 +187,7 @@ def get_training_data(data_all, imu_columns, option, sample_points=None, extra_a
     orientation = data_all[['ori_w', 'ori_x', 'ori_y', 'ori_z']].values
     data_used = data_all[imu_columns].values
     time_stamp = data_all['time'].values / 1e09
+    gravity = data_all[['grav_x', 'grav_y', 'grav_z']].values
 
     targets = None
 
@@ -175,8 +198,10 @@ def get_training_data(data_all, imu_columns, option, sample_points=None, extra_a
     elif option.target_ == 'local_speed':
         targets = compute_local_speed(time_stamp, pose_data, orientation)
     elif option.target_ == 'local_speed_gravity':
-        gravity = data_all[['grav_x', 'grav_y', 'grav_z']].values
         targets = compute_local_speed_with_gravity(time_stamp, pose_data, orientation, gravity)
+    elif option.target_ == 'acce_bias_gravity':
+        linacce = data_all[['linacce_x', 'linacce_y', 'linacce_z']].values
+        targets = compute_acceleration_bias_with_gravity(time_stamp, pose_data, linacce, gravity)
 
     if extra_args is not None:
         if 'target_smooth_sigma' in extra_args:
@@ -196,7 +221,6 @@ def get_training_data(data_all, imu_columns, option, sample_points=None, extra_a
         features = compute_fourier_features(data_used, sample_points, option.window_size_, extra_args['frq_threshold'],
                                             extra_args['discard_direct'])
     elif option.feature_ == 'direct_gravity':
-        gravity = data_all[['grav_x', 'grav_y', 'grav_z']].values
         features = compute_direct_feature_gravity(data_used[:, :3], data_used[:, -3:],
                                                   gravity, sample_points, option.window_size_, gaussian_sigma)
     else:
