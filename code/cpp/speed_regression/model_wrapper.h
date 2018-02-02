@@ -76,14 +76,6 @@ class SVRCascade: public ModelWrapper{
   std::vector<std::string> class_names_;
 };
 
-class CVModel: public ModelWrapper{
- public:
-  bool LoadFromFile(const std::string& path) override;
-  void Predict(const cv::Mat& feature, Eigen::VectorXd* response) const override;
-  virtual void Predict(const cv::Mat& feature, Eigen::VectorXd* response, int* label) const override;
- private:
-  std::vector<cv::Ptr<cv::ml::SVM>> regressor_;
-};
 
 }  // namespace IMUProject
 

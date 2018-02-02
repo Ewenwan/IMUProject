@@ -45,6 +45,7 @@ struct TrainingDataOption {
   const int kThreads = 1;
 };
 
+// Compute different type of features. Please refer code/python/training_data.py for the definition of each feature.
 cv::Mat ComputeLocalSpeedTarget(const std::vector<double> &time_stamp,
                                 const std::vector<Eigen::Vector3d> &position,
                                 const std::vector<Eigen::Quaterniond> &orientation,

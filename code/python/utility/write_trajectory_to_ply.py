@@ -62,31 +62,11 @@ def write_ply_to_file(path, position, orientation, acceleration=None,
 
 
 def read_trajectory_from_ply_file(path):
+    """
+    Read ply files into numpy array.
+    :param path: File path of the ply file.
+    :return: Nx3 array containing point positions.
+    """
     with open(path, 'rb') as f:
         plydata = plyfile.PlyData.read(f)
     return plydata.elements[0].data
-
-
-if __name__ == '__main__':
-    import argparse
-    import pandas
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('pose_file', type=str)
-    parser.add_argument('output', type=str)
-
-    args = parser.parse_args()
-
-    nano_to_sec = 1e09
-    pose_data = np.genfromtxt(args.pose_file)
-    assert pose_data.shape[1] == 8
-    ts = pose_data[:, 0]
-    print('Pose sample rate: {:2f}Hz'.format((ts.shape[0] - 1.0) * nano_to_sec / (ts[-1] - ts[0])))
-    orientation = pose_data[:, [-1, -4, -3, -2]]
-    position = pose_data[:, [1, 2, 3]]
-
-    position[:, [0, 1, 2]] = position[:, [0, 2, 1]]
-    position[:, 1] *= -1
-    print('Writing ply file')
-    write_ply_to_file(path=args.output, position=position, orientation=orientation)
-    print('File writing to ' + args.output)

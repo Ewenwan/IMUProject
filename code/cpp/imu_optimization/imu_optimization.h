@@ -15,6 +15,7 @@
 
 namespace IMUProject {
 
+// This function defines a sparse grid where the optimization is performed.
 class SparseGrid {
  public:
   SparseGrid(const double *time_stamp, const int N, const int variable_count,
