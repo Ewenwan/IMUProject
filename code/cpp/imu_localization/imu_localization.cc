@@ -110,8 +110,9 @@ int IMUTrajectory::RegressSpeed(const int end_ind) {
     } else if (option_.reg_option == ORI) {
       double ang = std::atan2(ls_z, ls_x);
       local_speed_.emplace_back(option_.const_speed * std::cos(ang), 0, option_.const_speed * std::sin(ang));
-    } else { // Z_ONLY
-      local_speed_.emplace_back(ls_x, 0, 0);
+    } else {
+      LOG(ERROR) << "Unexpected regression type.";
+      local_speed_.emplace_back(0, 0, 0);
     }
 
     time_regression_.push_back((cv::getTickCount() - clock) / static_cast<float>(cv::getTickFrequency()));

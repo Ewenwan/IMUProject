@@ -10,26 +10,14 @@
 
 namespace IMUProject {
 
+// Rotate an array of 3D vectors by an array of quaternions.
 std::vector<Eigen::Vector3d> Rotate3DVector(const std::vector<Eigen::Vector3d> &input,
                                             const std::vector<Eigen::Quaterniond> &orientation);
 
-std::vector<Eigen::Vector3d> Rotate3DVector(const std::vector<Eigen::Vector3d> &input,
-                                            const std::vector<Eigen::Matrix3d> &orientation);
-
+// Perform single integration.
 std::vector<Eigen::Vector3d> Integration(const std::vector<double> &ts,
                                          const std::vector<Eigen::Vector3d> &input,
                                          const Eigen::Vector3d &initial = Eigen::Vector3d(0, 0, 0));
-
-inline Eigen::Quaterniond OrientationFromGravityMegnet(const Eigen::Vector3d& gravity,
-                                                       const Eigen::Vector3d& magnet,
-                                                       const Eigen::Vector3d global_gravity = Eigen::Vector3d(0, 0, 1),
-                                                       const Eigen::Vector3d global_north = Eigen::Vector3d(0, 1, 0)){
-  Eigen::Quaterniond rot_grav = Eigen::Quaterniond::FromTwoVectors(gravity, global_gravity);
-  Eigen::Vector3d magnet_grav = rot_grav * magnet;
-  magnet_grav[2] = 0.0;
-  Eigen::Quaterniond rot_magnet = Eigen::Quaterniond::FromTwoVectors(magnet_grav, global_north);
-  return rot_magnet * rot_grav;
-}
 
 // We need to eliminate device tilting before computing heading from the magnet vector.
 inline Eigen::Quaterniond OrientationFromMagnet(const Eigen::Vector3d& magnet,

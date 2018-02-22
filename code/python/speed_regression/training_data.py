@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/..')
 from algorithms import geometry
 
-
 class TrainingDataOption:
     def __init__(self, sample_step=10, window_size=200, feature='direct_gravity', target='local_speed_gravity'):
         # Feature vectors and targets will be computed once $self.sample_step_ frames.
@@ -28,7 +27,8 @@ class TrainingDataOption:
 
 def compute_fourier_features(data, samples, window_size, threshold, discard_direct=False):
     """
-    Compute fourier coefficients as feature vector
+    Compute fourier coefficients as feature vector. Not used.
+    
     :param data: NxM array for N samples with M dimensions
     :return: Nxk array
     """
@@ -42,6 +42,17 @@ def compute_fourier_features(data, samples, window_size, threshold, discard_dire
 
 
 def compute_direct_features(data, samples_points, window_size, sigma=-1):
+    """
+    Construct feature vectors by concatenating source channels.
+    
+    :param data: NxM array. Each row contains all information of a frame.
+    :param samples_points: Indices of frames where feature vectors are constructed.
+    :param window_size: When constructing the feature vector at frame i, information between (i-window_size, i]
+                        is used.
+    :param sigma: When set to positive value, the data matrix will be filtered along the first dimension before
+                  concatenation.
+    :return: A matrix containing feature vectors.
+    """
     features = np.empty([samples_points.shape[0], data.shape[1] * window_size], dtype=np.float)
     for i in range(samples_points.shape[0]):
         data_slice = data[samples_points[i] - window_size:samples_points[i]]
@@ -52,7 +63,18 @@ def compute_direct_features(data, samples_points, window_size, sigma=-1):
 
 
 def compute_direct_feature_gravity(gyro, linacce, gravity, samples, window_size, sigma=-1):
-    gyro_gravity = gyro
+    """
+    Construct feature vectors by concatenating angular rates and linear accelerations in stabilized IMU frame.
+    
+    :param gyro: Nx3 array. Angular rates.
+    :param linacce: Nx3 array. Linear accelerations.
+    :param gravity: Nx3 array. Gravity vectors in local device frame.
+    :param samples: Indices where feature vectors are constructed.
+    :param window_size: Number of frames used when constructing feature vectors.
+    :param sigma: Sigma used for pre-filtering the signal before concatenating.
+    :return: A matrix containing feature vectors.
+    """
+    gyro_gravity = geometry.align_3dvector_with_gravity(gyro, gravity)
     linacce_gravity = geometry.align_3dvector_with_gravity(linacce, gravity)
     return compute_direct_features(np.concatenate([gyro_gravity, linacce_gravity], axis=1), samples_points=samples,
                                    window_size=window_size, sigma=sigma)
@@ -60,22 +82,25 @@ def compute_direct_feature_gravity(gyro, linacce, gravity, samples, window_size,
 
 def compute_speed(time_stamp, position, sample_points=None):
     """
-    Compute speed vector giving position and time_stamp
-    :param time_stamp:
-    :param position:
-    :param sample_points:
-    :return:
+    Compute speed vectors in the global frame giving position and time_stamp.
+    
+    :param time_stamp: N array. Time stamps of each frame.
+    :param position: Nx3 array. Positions of each frame.
+    :param sample_points: M array. Indices where feature vectors are constructed.
+    :return: Mx3 array, each contraining a speed vector at sampled frames.
     """
     if sample_points is None:
         sample_points = np.arange(0, time_stamp.shape[0], dtype=int)
     sample_points[-1] = min(sample_points[-1], time_stamp.shape[0] - 2)
-    speed = (position[sample_points+1] - position[sample_points]) / (time_stamp[sample_points+1] - time_stamp[sample_points])[:, None]
+    speed = (position[sample_points+1] - position[sample_points]) / (time_stamp[sample_points+1] -
+                                                                     time_stamp[sample_points])[:, None]
     return speed
 
 
 def compute_local_speed(time_stamp, position, orientation, sample_points=None):
     """
     Compute the speed in local (IMU) frame.
+    
     :param time_stamp: Nx1 array containing time stamps for each frame.
     :param position: Nx3 array of positions
     :param orientation: Nx4 array of orientations as quaternion
@@ -116,32 +141,11 @@ def compute_local_speed_with_gravity(time_stamp, position, orientation, gravity,
     return local_speed
 
 
-def compute_acceleration_bias_with_gravity(time_stamp, positions, linacce, gravity,
-                                           sample_points=None, local_gravity=np.array([0., 1., 0.])):
-    if sample_points is None:
-        sample_points = np.arange(0, time_stamp.shape[0], dtype=int)
-    sample_points[-1] = min(sample_points[-1], time_stamp.shape[0] - 2)
-
-    dt = time_stamp[1:] - time_stamp[:-1]
-    if dt.ndim == 1:
-        dt = dt[:, None]
-
-    speed = (positions[1:] - positions[:-1]) / dt
-    speed = np.concatenate([np.zeros([1, 3]), speed], axis=0)
-    acce = (speed[1:] - speed[:-1]) / dt
-    acce = np.concatenate([np.zeros([1, 3]), acce], axis=0)
-    # Double differentiation introduces large noises. We pre-filter the linear acceleration with sigma=10
-    pre_filter_sigma = 10.0
-    acce = gaussian_filter1d(acce, sigma=pre_filter_sigma, axis=0)
-    acce_grav = geometry.align_3dvector_with_gravity(acce, gravity, local_gravity)
-    linacce_grav = geometry.align_3dvector_with_gravity(linacce, gravity, local_gravity)
-    return acce_grav[sample_points] - linacce_grav[sample_points]
-
-
 def compute_delta_angle(time_stamp, position, orientation, sample_points=None,
                         local_axis=quaternion.quaternion(1.0, 0., 0., -1.)):
     """
     Compute the cosine between the moving direction and viewing direction. Not used.
+    
     :param time_stamp: Time stamp
     :param position: Position. When passing Nx2 array, compute ignore z direction
     :param orientation: Orientation as quaternion
@@ -167,9 +171,10 @@ def compute_delta_angle(time_stamp, position, orientation, sample_points=None,
     return cos_array, valid_array
 
 
-def get_training_data(data_all, imu_columns, option, sample_points=None, extra_args=None):
+def get_training_data(data_all, option, sample_points=None, extra_args=None):
     """
     Create training data.
+    
     :param data_all: The whole dataset. Must include 'time' column and all columns inside imu_columns
     :param imu_columns: Columns used for constructing feature vectors. Fields must exist in the dataset
     :param option: An instance of TrainingDataOption
@@ -178,18 +183,16 @@ def get_training_data(data_all, imu_columns, option, sample_points=None, extra_a
     :param extra_args: Extra arguments.
     :return: [Nx(d+1)] array. Target value is appended at back
     """
-    N = data_all.shape[0]
     if sample_points is None:
         sample_points = np.arange(option.window_size_,
-                                  N - 1,
+                                  data_all.shape[0] - 1,
                                   option.sample_step_,
                                   dtype=int)
-    assert sample_points[-1] < N
+    assert sample_points[-1] < data_all.shape[0]
     pose_data = data_all[['pos_x', 'pos_y', 'pos_z']].values
     orientation = data_all[['ori_w', 'ori_x', 'ori_y', 'ori_z']].values
-    data_used = data_all[imu_columns].values
+    data_used = data_all[['gyro_x', 'gyro_y', 'gyro_z', 'linacce_x', 'linacce_y', 'linacce_z']].values
     time_stamp = data_all['time'].values / 1e09
-    gravity = data_all[['grav_x', 'grav_y', 'grav_z']].values
 
     targets = None
 
@@ -200,10 +203,8 @@ def get_training_data(data_all, imu_columns, option, sample_points=None, extra_a
     elif option.target_ == 'local_speed':
         targets = compute_local_speed(time_stamp, pose_data, orientation)
     elif option.target_ == 'local_speed_gravity':
+        gravity = data_all[['grav_x', 'grav_y', 'grav_z']].values
         targets = compute_local_speed_with_gravity(time_stamp, pose_data, orientation, gravity)
-    elif option.target_ == 'acce_bias_gravity':
-        linacce = data_all[['linacce_x', 'linacce_y', 'linacce_z']].values
-        targets = compute_acceleration_bias_with_gravity(time_stamp, pose_data, linacce, gravity)
 
     if extra_args is not None:
         if 'target_smooth_sigma' in extra_args:
@@ -223,6 +224,7 @@ def get_training_data(data_all, imu_columns, option, sample_points=None, extra_a
         features = compute_fourier_features(data_used, sample_points, option.window_size_, extra_args['frq_threshold'],
                                             extra_args['discard_direct'])
     elif option.feature_ == 'direct_gravity':
+        gravity = data_all[['grav_x', 'grav_y', 'grav_z']].values
         features = compute_direct_feature_gravity(data_used[:, :3], data_used[:, -3:],
                                                   gravity, sample_points, option.window_size_, gaussian_sigma)
     else:

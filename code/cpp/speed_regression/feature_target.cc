@@ -50,7 +50,7 @@ cv::Mat ComputeLocalSpeedTarget(const std::vector<double> &time_stamp,
   return local_speed;
 }
 
-// This function is mostly the replicate of the ComputeLocalSpeedTarget function.
+
 cv::Mat ComputeLocalSpeedTargetGravityAligned(const std::vector<double>& time_stamp,
                                               const std::vector<Eigen::Vector3d>& position,
                                               const std::vector<Eigen::Quaterniond>& orientation,
@@ -115,50 +115,31 @@ cv::Mat ComputeDirectFeature(const Eigen::Vector3d* gyro,
   return feature_filtered.reshape(1, 1);
 }
 
-Eigen::Vector3d AdjustEulerAngle(const Eigen::Vector3d &input) {
-  // pitch has to be inside (-pi/2, pi/2), roll and yaw has to be inside (-pi, pi)
-  Eigen::Vector3d output = input;
-  if (output[0] < -M_PI / 2) {
-    output[0] += M_PI;
-    output[1] = (output[1] - M_PI) * -1;
-    output[2] += M_PI;
-  } else if (output[0] > M_PI / 2) {
-    output[0] -= M_PI;
-    output[1] = (output[1] - M_PI) * -1;
-    output[2] -= M_PI;
-  }
-
-  for (auto j = 1; j < 3; ++j) {
-    if (output[j] < M_PI) {
-      output[j] += 2 * M_PI;
-    }
-    if (output[j] > M_PI) {
-      output[j] -= 2 * M_PI;
-    }
-  }
-  return output;
-}
-
 cv::Mat ComputeDirectFeatureGravity(const Eigen::Vector3d* gyro,
                                     const Eigen::Vector3d* linacce,
                                     const Eigen::Vector3d* gravity,
                                     const int N, const double sigma,
                                     const Eigen::Vector3d local_gravity) {
   Mat feature(N, 6, CV_32FC1, cv::Scalar::all(0));
+  const double epsilon = 1e-03;
   for (auto i = 0; i < N; ++i) {
-    Eigen::Quaterniond rotor = Eigen::Quaterniond::FromTwoVectors(gravity[i], local_gravity);
+
     Eigen::Vector3d aligned_linacce = linacce[i];
-    // TODO(yanhang): Is setting a slack (0.99) reasonable here?
-    if (rotor.w() < 0.99) {
+    Eigen::Vector3d aligned_gyro = gyro[i];
+
+    // There are two singular points when computing the rotation between the measured gravity direction
+    // and the target gravity direction: in parallel or in oppsite direction.
+    const double dot_pro = local_gravity.dot(gravity[i]) / (gravity[i].norm() * local_gravity.norm());
+    if(dot_pro < -1.0 + epsilon){
+      // In opposite direction, reverse the Y component.
+      aligned_linacce[1] *= -1;
+      aligned_gyro[1] *= -1;
+    } else if (std::fabs(dot_pro) < 1.0 - epsilon){
+      // Within non-singular range.
+      Eigen::Quaterniond rotor = Eigen::Quaterniond::FromTwoVectors(gravity[i], local_gravity);
       aligned_linacce = rotor * linacce[i];
+      aligned_gyro = rotor * gyro[i];
     }
-    // TODO(yanhang): Aligning the gyroscope w.r.t. gravity is still buggy. Omit it for the moment.
-//    Eigen::Quaterniond gyro_quat = rotor * Eigen::AngleAxis<double>(gyro[i][0], Eigen::Vector3d::UnitX()) *
-//        Eigen::AngleAxis<double>(gyro[i][1], Eigen::Vector3d::UnitY()) *
-//        Eigen::AngleAxis<double>(gyro[i][2], Eigen::Vector3d::UnitZ());
-//    Eigen::Vector3d aligned_gyro = AdjustEulerAngle(gyro_quat.toRotationMatrix().eulerAngles(0, 1, 2));
-    // LOG(WARNING) << "Since the gyroscope transformation is still buggy, we use direct feature here.";
-    const Eigen::Vector3d& aligned_gyro = gyro[i];
 
     feature.at<float>(i, 0) = (float) aligned_gyro[0];
     feature.at<float>(i, 1) = (float) aligned_gyro[1];

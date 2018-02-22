@@ -1,11 +1,17 @@
 import math
 
 import numpy as np
-from numba import jit
 import quaternion
 
 
 def rotate_vector(input, orientation):
+    """
+    Rotate 3D vectors with quaternions.
+    
+    :param input: Nx3 array containing N 3D vectors.
+    :param orientation: Nx4 array containing N quaternions.
+    :return: Nx3 array containing rotated vectors.
+    """
     output = np.empty(input.shape, dtype=float)
     for i in range(input.shape[0]):
         q = quaternion.quaternion(*orientation[i])
@@ -15,8 +21,10 @@ def rotate_vector(input, orientation):
 
 def rotation_matrix_from_two_vectors(v1, v2):
     """
-    Using Rodrigues rotation formula
+    Compute 3x3 rotation matrix between two vectors using Rodrigues rotation formula. Two vectors need not be
+    normalized.
     https://en.wikipedia.org/wiki/Rodrigues%27_rotation_formula
+    
     :param v1: starting vector
     :param v2: ending vector
     :return 3x3 rotation matrix
@@ -36,10 +44,11 @@ def rotation_matrix_from_two_vectors(v1, v2):
 
 def quaternion_from_two_vectors(v1, v2):
     """
-    Compute quaternion from two vectors
-    :param v1:
-    :param v2:
-    :return Quaternion representation of rotation between v1 and v2
+    Compute quaternion from two vectors. v1 and v2 need not be normalized.
+    
+    :param v1: starting vector
+    :param v2: ending vector
+    :return Quaternion representation of rotation that rotate v1 to v2.
     """
     v1n = v1 / np.linalg.norm(v1)
     v2n = v2 / np.linalg.norm(v2)
@@ -51,7 +60,8 @@ def quaternion_from_two_vectors(v1, v2):
 
 def align_3dvector_with_gravity(data, gravity, local_g_direction=np.array([0, 1, 0])):
     """
-    Adjust pose such that the gravity is at $target$ direction
+    Eliminate pitch and roll from a 3D vector by aligning gravity vector to local_g_direction.
+    
     @:param data: N x 3 array
     @:param gravity: real gravity direction
     @:param local_g_direction: z direction before alignment
@@ -61,62 +71,29 @@ def align_3dvector_with_gravity(data, gravity, local_g_direction=np.array([0, 1,
     assert data.shape[1] == 3, 'Expect Nx3 array input'
     assert data.shape[0] == gravity.shape[0], '{}, {}'.format(data.shape[0], gravity.shape[0])
 
-    # output = np.empty(data.shape, dtype=float)
+    epsilon = 1e-03
+    gravity_normalized = gravity / np.linalg.norm(gravity, axis=1)[:, None]
     output = np.copy(data)
     for i in range(data.shape[0]):
+        # Be careful about two singular conditions where gravity[i] and local_g_direction are parallel.
+        gd = np.dot(gravity_normalized[i], local_g_direction)
+        if gd > 1. - epsilon:
+            continue
+        if gd < -1. + epsilon:
+            output[i, 1] *= -1
+            continue
         q = quaternion_from_two_vectors(gravity[i], local_g_direction)
-        # TODO(yanhang): Is setting a a slack (0.99) reasonable here?
-        if q.w < 0.99:
-            output[i] = (q * quaternion.quaternion(1.0, *data[i]) * q.conj()).vec
-    return output
-
-
-def adjust_eular_angle(source):
-    # convert the euler angle s.t. pitch is in (-pi/2, pi/2), roll and yaw are in (-pi, pi)
-    output = np.copy(source)
-    if output[0] < -math.pi / 2:
-        output[0] += math.pi
-        output[1] *= -1
-        output[2] += math.pi
-    elif output[0] > math.pi / 2:
-        output[0] -= math.pi
-        output[1] *= -1
-        output[2] -= math.pi
-
-    for j in [1, 2]:
-        if output[j] < -math.pi:
-            output[j] += 2 * math.pi
-        if output[j] > math.pi:
-            output[j] -= 2 * math.pi
-    return output
-
-
-def align_eular_rotation_with_gravity(data, gravity, local_g_direction=np.array([0, 1, 0])):
-    """
-    Transform the coordinate frame of orientations such that the gravity is aligned with $local_g_direction
-    :param data: input orientation in Eular
-    :param gravity:
-    :param local_g_direction:
-    :return:
-    """
-    assert data.shape[1] == 3, 'Expect Nx3 array'
-    assert data.shape[0] == gravity.shape[0], '{}, {}'.format(data.shape[0], gravity.shape[0])
-
-    # output = np.empty(data.shape, dtype=float)
-    output = np.copy(data)
-
-    # be careful of the ambiguity of eular angle representation
-    for i in range(data.shape[0]):
-        rotor = quaternion_from_two_vectors(gravity[i], local_g_direction)
-        if np.linalg.norm(rotor.vec) > 1e-3 and rotor.w < 0.999:
-            q = rotor * quaternion.from_euler_angles(*data[i]) * rotor.conj()
-            output[i] = adjust_eular_angle(quaternion.as_euler_angles(q))
+        output[i] = (q * quaternion.quaternion(1.0, *data[i]) * q.conj()).vec
     return output
 
 
 def orientation_from_gravity_and_magnet(grav, magnet,
                                         global_gravity=np.array([0, 0, 1]),
                                         global_north=np.array([0, 1, 0])):
+    """
+    Give the magnet vector and gravity vector in the local IMU frame, the device
+    orientation can be uniquely determined.
+    """
     rot_grav = quaternion_from_two_vectors(grav, global_gravity)
     # remove tilting
     magnet_grav = (rot_grav * quaternion.quaternion(1.0, *magnet) * rot_grav.conj()).vec
@@ -128,6 +105,11 @@ def orientation_from_gravity_and_magnet(grav, magnet,
 # complmentary filter
 def correct_gyro_drifting(rv, magnet, gravity, alpha=0.98,
                           min_cos=0.0, global_orientation=None):
+    """
+    This function implements the complementary filter that reduces the drifting error
+    of angular rates from the gyroscope with magnetometer data. In indoor environment
+    the magnetic field is highly unstable, thus this function is unused.
+    """
     assert rv.shape[0] == magnet.shape[0]
     assert rv.shape[0] == gravity.shape[0]
 
@@ -157,68 +139,3 @@ def correct_gyro_drifting(rv, magnet, gravity, alpha=0.98,
             fused[i] = True
             rv_filtered[i] = quaternion.slerp(rv_filtered[i], rv_mag, 0.0, 1.0, 1.0 - alpha)
     return quaternion.as_float_array(rv_filtered), fused
-
-
-
-if __name__ == '__main__':
-    import pandas
-    import matplotlib.pyplot as plt
-    from utility import write_trajectory_to_ply
-    from pre_processing import gen_dataset
-
-    skip = 400
-    data_path = '../../../data/test_gravity/gravity_rotate4'
-    data_all = pandas.read_csv(data_path + '/processed/data.csv')
-
-    # magnet_data = np.genfromtxt(data_path + '/magnet.txt')
-    ts = data_all['time'].values
-    gyro = data_all[['gyro_x', 'gyro_y', 'gyro_z']].values
-    orientation = data_all[['ori_w', 'ori_x', 'ori_y', 'ori_z']].values
-    position = data_all[['pos_x', 'pos_y', 'pos_z']].values
-    gravity = data_all[['grav_x', 'grav_y', 'grav_z']].values
-
-    # magnet = gen_dataset.interpolate_3dvector_linear(magnet_data, ts)[:, 1:]
-
-    # for i in range(magnet.shape[0]):
-    #     q = quaternion.quaternion(*orientation[i])
-    #     magnet[i] = (q * quaternion.quaternion(0.0, *magnet[i]) * q.conj()).vec
-    #
-    # # magnet = gaussian_filter1d(magnet, sigma=2.0, axis=0)
-    # magnet_mag = np.linalg.norm(magnet, axis=1)
-    # max_mag = np.max(magnet_mag)
-    #
-    # # test with complmentary filter
-    # rv = data_all[['rv_w', 'rv_x', 'rv_y', 'rv_z']].values
-    # rv_filtered, fused = correct_gyro_drifting(rv, magnet, gravity, alpha=0.01,
-    #                                            global_orientation=quaternion.quaternion(*orientation[0]))
-    #
-    # write_trajectory_to_ply.write_ply_to_file(data_path + '/processed/comp_filter.ply', position, rv_filtered,
-    #                                           interval=200)
-    #
-    # plt.figure('Magnet direction')
-    # plt.plot(position[0:-1:10, 0], position[0:-1:10, 1], color='r')
-    #
-    # interval = 100
-    # mag_ratio = 10.0 / max_mag
-    # for i in range(0, magnet.shape[0], interval):
-    #     vtx = np.array([position[i, :2], position[i, :2] + magnet[i, :2] * mag_ratio])
-    #     plt.plot(vtx[:, 0], vtx[:, 1], color='r')
-    # plt.show()
-
-    eular_array = np.empty(gyro.shape, dtype=np.float)
-    for i in range(ts.shape[0]):
-        q = quaternion.from_euler_angles(*gyro[i])
-        eular_array[i] = adjust_eular_angle(quaternion.as_euler_angles(q))
-        if np.linalg.norm(eular_array[i] - gyro[i]) > 1.0:
-            print(gyro[i], eular_array[i], gyro[i] - eular_array[i], gyro[i] + eular_array[i])
-
-    plt.figure('Quaternion conversion')
-    for i in range(3):
-        plt.subplot(311 + i)
-        plt.plot(ts, gyro[:, i])
-        plt.plot(ts, eular_array[:, i])
-        plt.legend(['gyro', 'reconstructed'])
-    plt.show()
-
-
-

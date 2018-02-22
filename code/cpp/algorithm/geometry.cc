@@ -16,16 +16,6 @@ std::vector<Eigen::Vector3d> Rotate3DVector(const std::vector<Eigen::Vector3d> &
   return output;
 }
 
-std::vector<Eigen::Vector3d> Rotate3DVector(const std::vector<Eigen::Vector3d> &input,
-                                            const std::vector<Eigen::Matrix3d> &orientation) {
-  std::vector<Eigen::Vector3d> output(input.size());
-  for (int i = 0; i < input.size(); ++i) {
-    output[i] = orientation[i] * input[i];
-  }
-
-  return output;
-}
-
 std::vector<Eigen::Vector3d> Integration(const std::vector<double> &ts,
                                          const std::vector<Eigen::Vector3d> &input,
                                          const Eigen::Vector3d &initial) {

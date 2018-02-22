@@ -14,6 +14,7 @@
 
 namespace IMUProject {
 
+// This class manages the path of data files w.r.t to the data folder.
 class FileIO {
  public:
   explicit FileIO(const std::string& directory) : directory_(directory) {}
@@ -37,7 +38,7 @@ class FileIO {
   const std::string directory_;
 };
 
-// Structure to specify the column layout
+// Structure to specify the column layout. The numbers indicate the starting column index for each domain.
 struct DataLayout {
   const int time_stamp = 0;
   const int gyro = 1;
@@ -46,18 +47,18 @@ struct DataLayout {
   const int gravity = 10;
   const int magnet = 13;
   const int position = 16;
+  // "orientation" is the device orientation from the ground truth, while "rotation_vector" is the device orientation
+  // from the Android system.
   const int orientation = 19;
   const int rotation_vector = 23;
 };
 
 class IMUDataset {
  public:
-  /// Constructor for IMUDataset
-  /// \param directory Root directory of the dataset
-  /// \param load_control
+  // Constructor for IMUDataset. When loading the dataset, a bit-wise and operation will be performed with various
+  // pre-defined values to decide what domains to load. See static constexpr variables defined below.
   explicit IMUDataset(const std::string &directory, unsigned char load_control = 255);
 
-  // getters
   inline const std::vector<Eigen::Vector3d> &GetGyro() const {
     return gyrocope_;
   }
@@ -124,6 +125,7 @@ class IMUDataset {
     return timestamp_;
   }
 
+  // The binary codes for each domain. For example, if "load_control & IMU_GYRO == 1", the gyro data will be loaded.
   static constexpr unsigned char IMU_GYRO = 1;
   static constexpr unsigned char IMU_ACCELEROMETER = 2;
   static constexpr unsigned char IMU_LINEAR_ACCELERATION = 4;
@@ -153,19 +155,13 @@ class IMUDataset {
   std::vector<Eigen::Vector3d> position_;
 };
 
-/// Write a trajecotry to PLY file
-/// \param path output path
-/// \param position Nx3 cv::Mat contains the position
-/// \param orientation Nx4 cv::Mat contains the orientation as quaternion
-/// \param axis_length the length of the axis, set to negative value to omit axis
-/// \param kpoints
-/// \param interval the interval of axis visualization, set to negative value to omit axis
+// Write a trajecotry to PLY file. If "only_xy" is set to true, the z axis of the trajectory is set to 0.
+// In addition to trajectory, local axes can be drawn. Namely, axes with length "axis_length" represented
+// by "kpoints" points will be drawn every "interval" frames on the trajectory.
 void WriteToPly(const std::string &path, const double *ts, const Eigen::Vector3d *position,
                 const Eigen::Quaterniond *orientation, const int N, const bool only_xy = false,
                 const Eigen::Vector3d traj_color = Eigen::Vector3d(0, 255, 255),
                 const double axis_length = 0.5, const int kpoints = 100, const int interval = 200);
-
-std::vector<double> ParseCommaSeparatedLine(const std::string &input);
 
 } //namespace IMUProject
 #endif //PROJECT_IMU_DATASET_H

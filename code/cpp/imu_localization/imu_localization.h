@@ -29,8 +29,6 @@ enum RegressionOption {
   MAG,
   // Use only the orientation of the speed.
   ORI,
-  // Only constraints the speed along the local Z direction.
-  Z_ONLY,
   // Assume constant speed.
   CONST
 };
@@ -41,11 +39,14 @@ struct IMULocalizationOption {
   // Temporal window size (in frames) for each optimization.
   int local_opt_window = 1000;
 
-  int global_opt_interval = 2000;
+  // The weight parameter for local speed constraint.
   double weight_ls = 1.0;
+  // The weight parameter for zero vertical speed constraint.
   double weight_vs = 1.0;
 
   RegressionOption reg_option = FULL;
+
+  // When reg_option is set to CONST, the following const speed will be used.
   double const_speed = 1.0;
 
   static constexpr int reg_interval = 50;

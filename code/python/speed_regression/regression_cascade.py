@@ -11,14 +11,11 @@ from sklearn import svm
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import train_test_split
 
-sys.path.append('/home/yanhang/Documents/research/IMUProject/code/python')
-sys.path.append('/Users/yanhang/Documents/research/IMUProject/code/python')
-import speed_regression.training_data as td
+import training_data as td
 
 
 # The following class will be ignored. Not used.
 ignore_class = 'transition'
-args = None
 
 
 class SVMOption:
@@ -76,6 +73,7 @@ class SVMOption:
 def create_svm(svm_options):
     """
     Create an instance of SVM with svm_options.
+    
     :param svm_options: SVM options.
     :return: An instance of OpenCV SVM model.
     """
@@ -151,6 +149,7 @@ class SVRCascade:
         Train the cascade model. It first trains the classifier with train_feature and train_label. Then the
         training samples are split into num_classes groups based on train_label. Regressors are trained for each
         group and each channel.
+        
         :param train_feature: Nxd array containing N training feature vectors.
         :param train_label: Nx1 integer array containing N training labels.
         :param train_response: Nxc array where c equals to num_channels.
@@ -185,6 +184,7 @@ class SVRCascade:
     def test(self, test_feature, true_label=None, true_responses=None):
         """
         Predict the label and responses of given samples.
+        
         :param test_feature: Nxd array containing N testing feature vectors.
         :param true_label: Optional. Nx1 integer array containing N ground truth label.
         :param true_responses: Optional. Nxc array containing N ground truth responses.
@@ -340,7 +340,6 @@ def load_datalist(path, option, class_map=None):
     if class_map is None:
         class_map = {}
         build_classmap = True
-    imu_columns = ['gyro_x', 'gyro_y', 'gyro_z', 'linacce_x', 'linacce_y', 'linacce_z']
     for dataset in dataset_list:
         if len(dataset) > 0 and dataset[0] == '#':
             continue
@@ -363,8 +362,7 @@ def load_datalist(path, option, class_map=None):
         data_all = pandas.read_csv(data_path)
         extra_args = {'target_smooth_sigma': 30.0,
                       'feature_smooth_sigma': 2.0}
-        feature, target = td.get_training_data(data_all=data_all, imu_columns=imu_columns,
-                                               option=option, extra_args=extra_args)
+        feature, target = td.get_training_data(data_all=data_all, option=option, extra_args=extra_args)
         feature_all.append(feature)
         responses_all.append(target)
         label = class_map[info[1]]
