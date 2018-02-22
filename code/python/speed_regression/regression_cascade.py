@@ -11,7 +11,8 @@ from sklearn import svm
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import train_test_split
 
-import training_data as td
+sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/..')
+import speed_regression.training_data as td
 
 
 # The following class will be ignored. Not used.

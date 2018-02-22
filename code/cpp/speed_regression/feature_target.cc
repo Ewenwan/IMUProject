@@ -128,7 +128,7 @@ cv::Mat ComputeDirectFeatureGravity(const Eigen::Vector3d* gyro,
     Eigen::Vector3d aligned_gyro = gyro[i];
 
     // There are two singular points when computing the rotation between the measured gravity direction
-    // and the target gravity direction: in parallel or in oppsite direction.
+    // and the target gravity direction: in parallel or in opposite direction.
     const double dot_pro = local_gravity.dot(gravity[i]) / (gravity[i].norm() * local_gravity.norm());
     if(dot_pro < -1.0 + epsilon){
       // In opposite direction, reverse the Y component.
