@@ -132,7 +132,7 @@ if __name__ == '__main__':
                 pose_data = pose_data[unique_inds, :]
             output_timestamp = pose_data[:, 0]
             output_samplerate = output_timestamp.shape[0] * nano_to_sec / (output_timestamp[-1] - output_timestamp[0])
-            assert 195 < output_samplerate < 205, 'Wrong output sample rate: %f' % output_samplerate
+            # assert 190 < output_samplerate < 210, 'Wrong output sample rate: %f' % output_samplerate
 
             print('Pose sample rate: {:2f}Hz'.format(output_samplerate))
 

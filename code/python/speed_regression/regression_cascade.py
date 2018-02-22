@@ -419,10 +419,9 @@ if __name__ == '__main__':
             data_loaded = True
     if load_from_list and args.list:
         option = td.TrainingDataOption()
-        option.target_ = args.target
         option.sample_step_ = args.step_size
         feature_all, label_all, responses_all, class_map = load_datalist(path=args.list, option=option)
-        # responses_all = responses_all[:, [0, 2]]
+        responses_all = responses_all[:, [0, 2]]
 
         print('Data loaded. Total number of samples: ', feature_all.shape[0])
 
