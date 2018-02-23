@@ -125,11 +125,12 @@ int IMUTrajectory::RegressSpeed(const int end_ind) {
     const int window_start_id = std::max(i - option_.label_filter_radius, 0);
     const int window_end_id = std::min(i + option_.label_filter_radius,  static_cast<int>(labels_.size()));
     transition_counts_[i] = 0;
-    for (int j=window_start_id + 1; j < window_end_id; ++j){
-      if (labels_[j] != labels_[j-1]){
+    for (int j=window_start_id + 1; j <= window_end_id; ++j){
+      if (labels_[j] != labels_[j-1]) {
         ++transition_counts_[i];
       }
     }
+
      if (transition_counts_[i] > option_.max_allowed_transition){
        local_speed_[i] = Eigen::Vector3d(0, 0, 0);
      }
