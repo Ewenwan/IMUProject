@@ -7,6 +7,9 @@
 namespace IMUProject {
 
 namespace {
+
+
+  
 bool ReadResult(const std::string &path, const int frame_interval, std::vector<Eigen::Vector3d> *trajectory) {
   CHECK(trajectory);
   std::ifstream full_in(path.c_str());
