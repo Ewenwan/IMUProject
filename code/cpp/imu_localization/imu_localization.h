@@ -49,7 +49,7 @@ struct IMULocalizationOption {
   // When reg_option is set to CONST, the following const speed will be used.
   double const_speed = 1.0;
 
-  static constexpr int reg_interval = 20;
+  static constexpr int reg_interval = 30;
 
   // The following two terms are used to identify unreliable classification/regression results. It works as follows:
   // For i'th predicted label, we consider the window: [i - $label_filter_radius, i + $label_filter_radius].

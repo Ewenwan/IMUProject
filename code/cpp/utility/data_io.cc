@@ -114,4 +114,33 @@ void WriteToPly(const std::string &path, const double *ts, const Eigen::Vector3d
   }
 }
 
+std::vector<double> ParseCommaSeparatedLine(const std::string &input) {
+  CHECK_GT(input.length(), 0);
+  int st = 0, ed = (int) input.size();
+  // skip the space from the begining
+  while (input[st] == '\0') {
+    st++;
+  }
+  while (input[ed - 1] == '\0') {
+    ed--;
+  }
+
+  std::vector<double> values;
+  for (auto i = st + 1; i <= ed; ++i) {
+    if (i == ed && i > st) {
+      values.push_back(std::stod(input.substr(st, i)));
+      break;
+    }
+    if ((input[i] == ',' || input[i] == '\n') && i > st) {
+      values.push_back(std::stod(input.substr(st, i)));
+      st = i + 1;
+      // skip potential spaces after a comma
+      while (input[st] == '\0') {
+        st++;
+      }
+    }
+  }
+  return values;
+}
+  
 }//namespace IMUProject
