@@ -45,7 +45,7 @@ if __name__ == '__main__':
     parser.add_argument('path', type=str)
     parser.add_argument('--window_size', type=int, default=400)
     parser.add_argument('--stride', type=float, default=0.64)
-    parser.add_argument('--start_portion_length', type=int, default=5)
+    parser.add_argument('--start_length', type=int, default=5)
     parser.add_argument('--no_ground_truth', action='store_true')
 
     args = parser.parse_args()
@@ -124,7 +124,7 @@ if __name__ == '__main__':
         # First compute the fft of linear acceleration and angular rate
         linacce_segment = linacce[step_index[i] - args.window_size:step_index[i]]
         linacce_fft = np.fft.rfft(linacce_segment, axis=0)
-        gyro_segment = gyro[step_index[i] - args.wiundow_size:step_index[i]]
+        gyro_segment = gyro[step_index[i] - args.window_size:step_index[i]]
         gyro_fft = np.fft.rfft(gyro_segment, axis=0)
 
         theta_cf = get_theta_closed_form(linacce_fft, gyro_fft, frq[i], mv, gv)
@@ -152,10 +152,40 @@ if __name__ == '__main__':
                         math.sin(theta_at_step2[i]) - math.sin(gt_theta[i])) > thres:
             theta_at_step2[i] += math.pi
 
-            # Dead-reckoning
+    # Dead-reckoning
     track_length = np.sum(np.linalg.norm(positions[1:] - positions[:-1], axis=1))
     stride = args.stride
     positions_sc = np.zeros([steps.shape[0], 2])
     for i in range(1, positions_sc.shape[0]):
         positions_sc[i] = positions_sc[i - 1] + stride * np.array([math.cos(theta_at_step2[i - 1]),
                                                                    math.sin(theta_at_step2[i - 1])])
+
+    _, rotation_2d, translation_2d = icp.fit_transformation(positions_sc[:args.start_length, :2],
+                                                            positions_at_steps[:args.start_length, :2])
+    positions_sc[:, :2] = np.dot(rotation_2d, (positions_sc[:, :2]
+                                               - positions_at_steps[0, :2]).T).T + positions_at_steps[0, :2]
+
+    # Interpolate positions at steps back to IMU time stamp and write ply file
+    positions_sc = np.concatenate([[positions_sc[0]], positions_sc, [positions_sc[-1]]], axis=0)
+    step_ext = np.concatenate([[ts[0] - 1], steps[:, 0], [ts[-1] + 1]], axis=0)
+    positions_at_imu = interpolate.interp1d(step_ext, positions_sc, axis=0)(ts)
+    positions_at_imu = np.concatenate([positions_at_imu, np.zeros([ts.shape[0], 1])], axis=1)
+
+    # Write the result
+    print('Writing to csv')
+    data_mat = np.zeros([ts.shape[0], 10], dtype=float)
+    column_list = ['time', 'pos_x', 'pos_y', 'pos_z', 'speed_x', 'speed_y', 'speed_z', 'bias_x', 'bias_y', 'bias_z']
+    data_mat[:, 0] = ts
+    data_mat[:, 1:4] = positions_at_imu
+
+    out_dir = args.path + '/result_frq_step/'
+    if not os.path.isdir(out_dir):
+        os.makedirs(out_dir)
+    data_pandas = pandas.DataFrame(data_mat, columns=column_list)
+    data_pandas.to_csv(out_dir + '/result_frq_step.csv')
+
+    write_trajectory_to_ply.write_ply_to_file(out_dir + '/result_trajectory_frq_step.ply', positions_at_imu,
+                                              orientations, trajectory_color=(80, 80, 80), length=0,
+                                              interval=300, num_axis=0)
+
+    print('All done')
