@@ -14,7 +14,7 @@ parser.add_argument('--recompute', action='store_true')
 args = parser.parse_args()
 
 exec_path = '../../cpp/cmake-build-relwithdebinfo/imu_localization/IMULocalization_cli'
-model_path = '../../../models/svr_cascade1116_2'
+model_path = '../../../models/svr_cascade0309'
 preset_list = ['mag_only', 'ori_only', 'full', 'raw']
 # preset_list = ['full']
 
@@ -49,6 +49,6 @@ for data in data_list:
         print(command)
         subprocess.call(command, shell=True)
     # Step counting
-    command = 'python3 ../speed_regression/step_counting.py %s' % data_path
-    print(command)
-    subprocess.call(command, shell=True)
+    # command = 'python3 ../speed_regression/step_counting.py %s' % data_path
+    # print(command)
+    # subprocess.call(command, shell=True)
