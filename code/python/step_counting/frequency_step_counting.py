@@ -7,7 +7,6 @@ from scipy import interpolate
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
-from algorithms import geometry
 from algorithms import icp
 from utility import write_trajectory_to_ply
 
@@ -45,7 +44,7 @@ if __name__ == '__main__':
     parser.add_argument('path', type=str)
     parser.add_argument('--window_size', type=int, default=400)
     parser.add_argument('--stride', type=float, default=0.64)
-    parser.add_argument('--start_length', type=int, default=5)
+    parser.add_argument('--start_length', type=int, default=2500)
     parser.add_argument('--no_ground_truth', action='store_true')
 
     args = parser.parse_args()
@@ -160,16 +159,17 @@ if __name__ == '__main__':
         positions_sc[i] = positions_sc[i - 1] + stride * np.array([math.cos(theta_at_step2[i - 1]),
                                                                    math.sin(theta_at_step2[i - 1])])
 
-    _, rotation_2d, translation_2d = icp.fit_transformation(positions_sc[:args.start_length, :2],
-                                                            positions_at_steps[:args.start_length, :2])
-    positions_sc[:, :2] = np.dot(rotation_2d, (positions_sc[:, :2]
-                                               - positions_at_steps[0, :2]).T).T + positions_at_steps[0, :2]
-
     # Interpolate positions at steps back to IMU time stamp and write ply file
     positions_sc = np.concatenate([[positions_sc[0]], positions_sc, [positions_sc[-1]]], axis=0)
     step_ext = np.concatenate([[ts[0] - 1], steps[:, 0], [ts[-1] + 1]], axis=0)
     positions_at_imu = interpolate.interp1d(step_ext, positions_sc, axis=0)(ts)
     positions_at_imu = np.concatenate([positions_at_imu, np.zeros([ts.shape[0], 1])], axis=1)
+
+    # Register the estimated trajectory to the ground truth
+    _, rotation_2d, translation_2d = icp.fit_transformation(positions_at_imu[:args.start_length, :2],
+                                                            positions[:args.start_length, :2])
+    positions_at_imu[:, :2] = np.dot(rotation_2d, (positions_at_imu[:, :2]
+                                                   - positions[0, :2]).T).T + positions[0, :2]
 
     # Write the result
     print('Writing to csv')
@@ -185,7 +185,7 @@ if __name__ == '__main__':
     data_pandas.to_csv(out_dir + '/result_frq_step.csv')
 
     write_trajectory_to_ply.write_ply_to_file(out_dir + '/result_trajectory_frq_step.ply', positions_at_imu,
-                                              orientations, trajectory_color=(80, 80, 80), length=0,
+                                              orientations, trajectory_color=(200, 100, 0), length=0,
                                               interval=300, num_axis=0)
 
     print('All done')
