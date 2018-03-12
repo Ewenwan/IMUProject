@@ -78,7 +78,7 @@ if __name__ == '__main__':
         plt.locator_params(nbins=5, axis='y')
         lines_imu += plt.plot(ts[constraint_ind], local_speed[:, axes_local[i]], 'b', lw=linewidth)
         lines_tango += plt.plot(ts[constraint_ind], ls_gt[:, axes_local[i]], 'r', lw=linewidth)
-    #plt.figlegend([lines_imu[-1], lines_tango[-1]], ['Our method', 'Tango (Ground truth)'],
-    #              loc='upper center', ncol=2, labelspacing=0.)
-    #fig_ls.savefig(result_path + '/regression.png', bbox_inches='tight')
-    fig.show()
+    # plt.figlegend([lines_imu[-1], lines_tango[-1]], ['Our method', 'Tango (Ground truth)'],
+    #               loc='upper center', ncol=2, labelspacing=0.)
+    fig_ls.savefig(result_path + '/regression.png', bbox_inches='tight')
+    # fig_ls.show()

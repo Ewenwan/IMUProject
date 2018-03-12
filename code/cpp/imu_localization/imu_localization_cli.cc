@@ -273,6 +273,5 @@ int main(int argc, char **argv) {
 	    acce[0] - linacce[i][0], acce[1] - linacce[i][1], acce[2] - linacce[i][2]);
     traj_out << buffer;
   }
-
   return 0;
 }

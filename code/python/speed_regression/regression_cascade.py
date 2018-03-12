@@ -390,6 +390,8 @@ if __name__ == '__main__':
     parser.add_argument('--option', default=None, type=str, help='(Optional) The path to a file containing the '
                                                                  'hyperparameters. If not provided, a grid search'
                                                                  ' will be performed to obtain the best hyperparameter.')
+    parser.add_argument('--discard_label', action='store_true')
+
     args = parser.parse_args()
 
     load_from_list = True
@@ -424,6 +426,9 @@ if __name__ == '__main__':
 
         print('Data loaded. Total number of samples: ', feature_all.shape[0])
 
+        if args.discard_label:
+            class_map = {'unknown': 0}
+            label_all = np.zeros(label_all.shape, dtype=np.int)
         for key, value in class_map.items():
             print('%d samples in %s(label %d)' % (len(label_all[label_all==value]), key, value))
 

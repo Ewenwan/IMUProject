@@ -20,13 +20,10 @@ args = None
 def load_datalist(path, option):
     root_dir = os.path.dirname(path)
     with open(path) as f:
-        dataset_list = [s.strip('\n') for s in f.readlines()]
+        dataset_list = [s.strip() for s in f.readlines() if s[0] != '#']
     feature_all = []
     target_all = []
     for dataset in dataset_list:
-        if len(dataset) > 0 and dataset[0] == '#':
-            continue
-
         info = dataset.split(',')
         data_path = root_dir + '/' + info[0] + '/processed/data.csv'
         if not os.path.exists(data_path):
@@ -36,15 +33,10 @@ def load_datalist(path, option):
         print('Loading dataset ' + data_path)
         data_all = pandas.read_csv(data_path)
 
-        imu_columns = ['gyro_x', 'gyro_y', 'gyro_z', 'linacce_x', 'linacce_y', 'linacce_z']
-
-        extra_args = {'frq_threshold': args.frq_threshold,
-                      'discard_direct': args.discard_direct,
-                      'target_smooth_sigma': 30.0,
+        extra_args = {'target_smooth_sigma': 30.0,
                       'feature_smooth_sigma': 2.0}
 
-        feature, target = td.get_training_data(data_all=data_all, imu_columns=imu_columns,
-                                               option=option, extra_args=extra_args)
+        feature, target = td.get_training_data(data_all=data_all, option=option, extra_args=extra_args)
         feature_all.append(feature)
         target_all.append(target)
 
@@ -59,8 +51,6 @@ if __name__ == '__main__':
     parser.add_argument('--step', default=10, type=int)
     parser.add_argument('--feature', default='direct_gravity', type=str)
     parser.add_argument('--target', default='local_speed_gravity', type=str)
-    parser.add_argument('--frq_threshold', default=50, type=int)
-    parser.add_argument('--discard_direct', default=True, type=bool)
     parser.add_argument('--split_ratio', default=0.3, type=float)
     parser.add_argument('--output', default='', type=str)
     parser.add_argument('--C', default=None, type=float)
