@@ -11,6 +11,8 @@ sys.path.append('/Users/yanhang/Documents/research/IMUProject/code/python')
 parser = argparse.ArgumentParser()
 parser.add_argument('list', type=str)
 parser.add_argument('--recompute', action='store_true')
+parser.add_argument('--start_length', type=int, default=2500)
+parser.add_argument('--stride', type=float, default=0.67)
 args = parser.parse_args()
 
 exec_path = '../../cpp/cmake-build-relwithdebinfo/imu_localization/IMULocalization_cli'
@@ -51,17 +53,18 @@ for data in data_list:
         warnings.warn(data_path + ' does not exist. Skip.')
         continue
     for preset in preset_list:
-        command = "%s %s --model_path %s --preset %s" % (exec_path, data_path, model_path, preset)
+        command = "%s %s --model_path %s --preset %s --start_portion_length %d" % (exec_path, data_path, model_path,
+                                                                                preset, args.start_length)
         print(command)
         subprocess.call(command, shell=True)
 
     # Step counting
-    command = 'python3 ../step_counting/enhanced_step_counting.py %s --placement %s --stride 0.67'\
-              % (data_path, data[1])
+    command = 'python3 ../step_counting/enhanced_step_counting.py %s --placement %s --stride %f --start_length %d'\
+              % (data_path, data[1], args.stride, args.start_length)
     print(command)
     subprocess.call(command, shell=True)
 
-    command = 'python3 ../step_counting/frequency_step_counting.py %s --stride 0.67'\
-              % (data_path)
+    command = 'python3 ../step_counting/frequency_step_counting.py %s --stride %f --start_length %d'\
+              % (data_path, args.stride, args.start_length)
     print(command)
     subprocess.call(command, shell=True)

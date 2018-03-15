@@ -165,21 +165,21 @@ void MainWidget::InitializeTrajectories(const std::string &path) {
     }
   }
 
-  {
-    sprintf(buffer, "%s/result_ori_only/result_ori_only.csv", path.c_str());
-    std::vector<Eigen::Vector3d> traj;
-    if (ReadResult(buffer, frame_interval_, &traj)){
-      add_trajectory(traj, imu_orientation, ori_traj_color, 0.5f, global_rotation);
-    }
-  }
+  // {
+  //   sprintf(buffer, "%s/result_ori_only/result_ori_only.csv", path.c_str());
+  //   std::vector<Eigen::Vector3d> traj;
+  //   if (ReadResult(buffer, frame_interval_, &traj)){
+  //     add_trajectory(traj, imu_orientation, ori_traj_color, 0.5f, global_rotation);
+  //   }
+  // }
 
-  {
-    sprintf(buffer, "%s/result_mag_only/result_mag_only.csv", path.c_str());
-    std::vector<Eigen::Vector3d> traj;
-    if (ReadResult(buffer, frame_interval_, &traj)){
-      add_trajectory(traj, imu_orientation, mag_traj_color, 0.5f, global_rotation);
-    }
-  }
+  // {
+  //   sprintf(buffer, "%s/result_mag_only/result_mag_only.csv", path.c_str());
+  //   std::vector<Eigen::Vector3d> traj;
+  //   if (ReadResult(buffer, frame_interval_, &traj)){
+  //     add_trajectory(traj, imu_orientation, mag_traj_color, 0.5f, global_rotation);
+  //   }
+  // }
 
 
 //  double traj_length = (gt_position.back() - gt_position[0]).norm();

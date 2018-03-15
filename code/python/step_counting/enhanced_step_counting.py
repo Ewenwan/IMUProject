@@ -39,7 +39,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('path', type=str)
     parser.add_argument('--start_length', type=int, default=2500)
-    parser.add_argument('--stride', type=float, default=-1.0)
+    parser.add_argument('--stride', type=float, default=0.67)
     parser.add_argument('--placement', type=str, default='handheld')
     parser.add_argument('--height', type=float, default=1.7)
     parser.add_argument('--k', type=float, default=0.3139)
@@ -113,13 +113,13 @@ if __name__ == '__main__':
     positions_sc = np.concatenate([[positions_sc[0]], positions_sc, [positions_sc[-1]]], axis=0)
     step_ext = np.concatenate([[ts[0, 0] - 1], est_steps[:, 0], [ts[-1, 0] + 1]], axis=0)
     positions_at_imu = interpolate.interp1d(step_ext, positions_sc, axis=0)(ts[:, 0])
-    positions_at_imu = np.concatenate([positions_at_imu, np.zeros([ts.shape[0], 1])], axis=1)
+    positions_at_imu = np.concatenate([positions_at_imu, positions[:, [2]]], axis=1)
 
     # Register the estimated trajectory to the ground truth
     _, rotation_2d, translation_2d = icp.fit_transformation(positions_at_imu[:args.start_length, :2],
                                                             positions[:args.start_length, :2])
-    positions_at_imu[:, :2] = np.dot(rotation_2d, (positions_at_imu[:, :2]
-                                                   - positions[0, :2]).T).T + positions[0, :2]
+    positions_at_imu[:, :2] = np.dot(rotation_2d, (positions_at_imu[:, :2] -
+                                                   positions_at_imu[0, :2]).T).T + positions[0, :2]
 
     # Write the result
     print('Writing to csv')

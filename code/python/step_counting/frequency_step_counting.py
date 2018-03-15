@@ -43,7 +43,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('path', type=str)
     parser.add_argument('--window_size', type=int, default=400)
-    parser.add_argument('--stride', type=float, default=0.64)
+    parser.add_argument('--stride', type=float, default=0.67)
     parser.add_argument('--start_length', type=int, default=2500)
     parser.add_argument('--no_ground_truth', action='store_true')
 
@@ -169,7 +169,7 @@ if __name__ == '__main__':
     _, rotation_2d, translation_2d = icp.fit_transformation(positions_at_imu[:args.start_length, :2],
                                                             positions[:args.start_length, :2])
     positions_at_imu[:, :2] = np.dot(rotation_2d, (positions_at_imu[:, :2]
-                                                   - positions[0, :2]).T).T + positions[0, :2]
+                                                   - positions_at_imu[0, :2]).T).T + positions[0, :2]
 
     # Write the result
     print('Writing to csv')
