@@ -44,10 +44,6 @@ MainWidget::MainWidget(const std::string &path,
                                    (float) width() / (float) height(),
                                    (float) canvas_width,
                                    (float) canvas_height));
-//		QImage traj_legend_image("../../viewer/resource/images/traj_legend.png");
-//		legend_areas_.emplace_back(width() / 2, 0.0, traj_legend_image.width(), traj_legend_image.height());
-//		legends_.emplace_back(new LegendRenderer(traj_legend_image.width(), traj_legend_image.height(), traj_legend_image));
-
   InitializeTrajectories(path);
 }
 
@@ -162,7 +158,7 @@ void MainWidget::InitializeTrajectories(const std::string &path) {
   }
 
   {
-    sprintf(buffer, "%s/result_step/result_step.csv", path.c_str());
+    sprintf(buffer, "%s/result_enh_step/result_enh_step.csv", path.c_str());
     std::vector<Eigen::Vector3d> traj;
     if (ReadResult(buffer, frame_interval_, &traj)){
       add_trajectory(traj, imu_orientation, step_traj_color, 0.5f, global_rotation);

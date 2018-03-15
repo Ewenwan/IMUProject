@@ -12,7 +12,7 @@ namespace IMUProject {
 // Implementation of canvas
 Canvas::Canvas(const float width, const float height,
                const float grid_size, const Eigen::Vector3f grid_color, const cv::Mat *texture)
-    : width_(width), height_(height), line_alpha_(0.1f) {
+    : width_(width), height_(height), line_alpha_(0.3f) {
   is_shader_init_ = false;
   vertex_data_ = {-width / 2.0f, 0.0f, -height / 2.0f,
                   width / 2.0f, 0.0f, -height / 2.0f,
