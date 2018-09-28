@@ -30,6 +30,6 @@ add_subdirectory(imu_optimization)
 add_subdirectory(speed_regression)
 add_subdirectory(imu_localization)
 
-add_subdirectory(viewer)
+# add_subdirectory(viewer)
 
 enable_testing()
