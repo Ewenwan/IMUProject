@@ -139,3 +139,32 @@ def correct_gyro_drifting(rv, magnet, gravity, alpha=0.98,
             fused[i] = True
             rv_filtered[i] = quaternion.slerp(rv_filtered[i], rv_mag, 0.0, 1.0, 1.0 - alpha)
     return quaternion.as_float_array(rv_filtered), fused
+
+
+def quaternion_to_euler(w, x, y, z):
+    """
+    Convert a quaternion to the euler angle as Body 3-2-1 sequence:
+    q(w, x, y, z) = exp(pitch) * exp(roll) * exp(yaw)
+    Adapted from:
+    https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+
+    Args:
+        w, x, y, z: the input quaternion, where w is the scalar part and (x, y ,z) is the vector part.
+
+    Returns:
+        pitch, roll, yaw
+    """
+    t0 = 2.0 * (w * x + y * z)
+    t1 = 1.0 - 2.0 * (x * x + y * y)
+    pitch = math.atan2(t0, t1)
+
+    t2 = 2.0 * (w * y - z * x)
+    t2 = 1.0 if t2 > +1.0 else t2
+    t2 = 1.0 if t2 < -1.0 else t2
+    roll = math.asin(t2)
+
+    t3 = 2.0 * (w * z + x * y)
+    t4 = 1.0 - 2.0 * (y * y + z * z)
+    yaw = math.atan2(t3, t4)
+
+    return pitch, roll, yaw
