@@ -1,111 +1,28 @@
 import os
-from os import path as osp
-import math
 import sys
 import json
 from os import path as osp
 import numpy as np
-from scipy.ndimage.filters import gaussian_filter1d
-import quaternion
 import torch
 
 from torch.utils.data import Dataset, DataLoader
-from torch.autograd import Variable
-import pandas
 
 sys.path.append(osp.join(osp.dirname(osp.abspath(__file__)), '..'))
 
-from algorithms import geometry
-from speed_regression import training_data as td
-from dl.tcn import TemporalConvNet
+from ml.tcn import TemporalConvNet
+from ml.mfn_data import load_datalist
+from ml.utils import AverageMeter
 
 _feature_column = ['gyro_x', 'gyro_y', 'gyro_z', 'linacce_x', 'linacce_y', 'linacce_z', 'grav_x', 'grav_y', 'grav_z',
                    'magnet_x', 'magnet_y', 'magnet_z']
 
-# _feature_column = ['gyro_x', 'gyro_y', 'gyro_z', 'linacce_x', 'linacce_y', 'linacce_z', 'grav_x', 'grav_y', 'grav_z']
-# _feature_column = ['gyro_x', 'gyro_y', 'gyro_z', 'linacce_x', 'linacce_y', 'linacce_z']
-
 _nano_to_sec = 1e09
 
-_input_channel, _output_channel = 12, 1
+_input_channel, _output_channel = 12, 180
 # _layer_channels = [24, 48, 96, 192, 192, 192, 192, 96, 48, 24]
 _layer_channels = [24, 48, 96, 96, 48]
-
-
-def compute_yaw_in_tango(orientations, filter_sigma=None):
-    yaw = np.empty(orientations.shape[0])
-    for i in range(orientations.shape[0]):
-        _, _, yaw[i] = geometry.quaternion_to_euler(*orientations[i])
-    return yaw
-
-
-def compute_magnet_yaw_in_tango(orientations, magnet, inlier_threshold=0.1):
-    north_in_tango = np.empty(magnet.shape[0])
-    for i in range(magnet.shape[0]):
-        q = quaternion.quaternion(*orientations[i])
-        mg = (q * quaternion.quaternion(0, *magnet[i]) * q.conj()).vec[0:2]
-        north_in_tango[i] = math.atan2(mg[1], mg[0])
-    median_north = np.median(north_in_tango)
-    diff = np.abs(north_in_tango - median_north)
-    inlier = north_in_tango[diff < inlier_threshold]
-    return np.mean(inlier)
-
-
-def load_datalist(root_dir, data_list):
-    train_features = []
-    train_targets = []
-    feature_smooth = 2.0
-    target_smooth = 10.0
-
-    for data in data_list:
-        print('Loading ', data)
-        data_all = pandas.read_csv(osp.join(root_dir, data, 'processed/data.csv'))
-        ts = data_all['time'].values / _nano_to_sec
-        ts -= ts[0]
-
-        positions = data_all[['pos_x', 'pos_y', 'pos_z']].values
-        orientations = data_all[['ori_w', 'ori_x', 'ori_y', 'ori_z']].values
-        gyro = data_all[['gyro_x', 'gyro_y', 'gyro_z']].values
-        linacce = data_all[['linacce_x', 'linacce_y', 'linacce_z']].values
-        gravity = data_all[['grav_x', 'grav_y', 'grav_z']].values
-        magnet = data_all[['magnet_x', 'magnet_y', 'magnet_z']].values
-
-        # gyro_aligned = geometry.align_3dvector_with_gravity(gyro, gravity)
-        # linacce_aligned = geometry.align_3dvector_with_gravity(linacce, gravity)
-        # feature = np.concatenate([gyro_aligned, linacce_aligned], axis=1)
-        # train_features.append(gaussian_filter1d(feature, sigma=2.0, axis=0))
-
-        # local_speed_gv = td.compute_local_speed_with_gravity(ts, positions, orientations, gravity)[:, [2]]
-        # local_speed_gv = gaussian_filter1d(local_speed_gv, sigma=30.0, axis=0)
-        # train_targets.append(local_speed_gv)
-
-        yaw_in_tango = compute_yaw_in_tango(orientations)
-        north_in_tango = compute_magnet_yaw_in_tango(orientations, magnet)
-        gt_yaw = np.mod(yaw_in_tango - north_in_tango, 2 * math.pi)[:, np.newaxis]
-
-        feature = gaussian_filter1d(data_all[_feature_column].values, sigma=feature_smooth, axis=0)
-        target = np.concatenate([np.sin(gt_yaw), np.cos(gt_yaw)], axis=1)
-        target = gaussian_filter1d(target, sigma=target_smooth, axis=0)
-        train_features.append(feature)
-        # train_targets.append(gt_yaw)
-        train_targets.append(target)
-
-    return train_features, train_targets
-
-
-class AverageMeter:
-    def __init__(self, ndim):
-        self.count = 0
-        self.sum = np.zeros(ndim)
-
-    def add(self, val):
-        self.sum += val
-        self.count += 1
-
-    def get_average(self):
-        if self == 0:
-            return self.sum
-        return self.sum / self.count
+_feature_sigma = 2.0
+_target_sigma = 10.0
 
 
 class IMUMagnetDataset(Dataset):
@@ -113,8 +30,11 @@ class IMUMagnetDataset(Dataset):
         with open(list_path) as f:
             data_list = [s.strip().split(',')[0] for s in f.readlines() if s[0] != '#']
         root_dir = osp.dirname(list_path)
+        self.angle_step = 360.0 / _output_channel
+        self.features, self.targets = load_datalist(root_dir, data_list, _feature_column, 'angle_cls',
+                                                    feature_sigma=_feature_sigma, target_sigma=_target_sigma,
+                                                    angle_step=self.angle_step)
 
-        self.features, self.targets = load_datalist(root_dir, data_list)
         self.sample_ids = []
         for i, feat in enumerate(self.features):
             sample_pt = np.arange(window_size / 2, feat.shape[0], step_size, dtype=np.int)[:, np.newaxis]
@@ -132,11 +52,11 @@ class IMUMagnetDataset(Dataset):
         if pos < self.window_size:
             feat = np.zeros([self.window_size, self.num_feat_channel], dtype=np.float32)
             feat[-pos:, :] = self.features[idx][:pos].astype(np.float32)
-            label = np.zeros([self.window_size, self.num_target_channel], dtype=np.float32)
-            label[-pos:, :] = self.targets[idx][:pos].astype(np.float32)
+            label = np.zeros([self.window_size, self.num_target_channel], dtype=np.int)
+            label[-pos:, :] = self.targets[idx][:pos].astype(np.int)
         else:
             feat = self.features[idx][pos - self.window_size:pos].astype(np.float32)
-            label = self.targets[idx][pos - self.window_size:pos].astype(np.float32)
+            label = self.targets[idx][pos - self.window_size:pos].astype(np.int)
         return feat.T, label.T
 
     def __len__(self):
@@ -148,13 +68,16 @@ class IMUMagnetSeqDataset(Dataset):
         with open(list_path) as f:
             data_list = [s.strip().split(',')[0] for s in f.readlines() if s[0] != '#']
         root_dir = osp.dirname(list_path)
-        self.features, self.targets = load_datalist(root_dir, data_list)
+        self.angle_step = 360.0 / _output_channel
+        self.features, self.targets = load_datalist(root_dir, data_list, _feature_column, 'angle_cls',
+                                                    feature_sigma=_feature_sigma, target_sigma=_target_sigma,
+                                                    angle_step=self.angle_step)
         self.num_feature_channel = self.features[0].shape[1]
         self.num_target_channel = self.targets[0].shape[1]
 
     def __getitem__(self, item):
         feat = self.features[item].astype(np.float32).T
-        label = self.targets[item].astype(np.float32).T
+        label = self.targets[item].astype(np.int).T
         return feat, label
 
     def __len__(self):
@@ -206,11 +129,11 @@ def train(args):
 
     # Define the network
     # layer_channels = [36] * num_layers
-    network = MagnetFusionNetwork(train_dataset.num_feat_channel, train_dataset.num_target_channel,
-                                  args.kernel_size, _layer_channels).to(device)
+    network = MagnetFusionNetwork(train_dataset.num_feat_channel, _output_channel, args.kernel_size,
+                                  _layer_channels).to(device)
 
     print('Network constructed')
-    criterion = torch.nn.MSELoss()
+    criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(network.parameters(), args.lr)
 
     if args.out_dir and osp.exists(osp.join(args.out_dir, 'logs', 'log.txt')):
@@ -221,18 +144,18 @@ def train(args):
     log_file = None
     if args.out_dir:
         log_file = osp.join(args.out_dir, 'logs', 'log.txt')
-    valid_seq_len = args.window_size * 3 // 4
+    valid_seq_len = args.window_size // 2
     try:
         for epoch in range(args.epochs):
             epoch_losses = AverageMeter(1)
             log_line = ''
             for batch_id, batch in enumerate(train_loader):
                 feature, target = batch
+                target = torch.Tensor.squeeze(target, dim=1)
                 feature, target = feature.to(device), target.to(device)
-
                 optimizer.zero_grad()
                 predicted = network(feature)
-                loss = criterion(predicted[:, -valid_seq_len:], target[:, -valid_seq_len:])
+                loss = criterion(predicted[:, :, -valid_seq_len:], target[:, -valid_seq_len:])
                 loss.backward()
                 optimizer.step()
                 epoch_losses.add(loss.cpu().item())
@@ -245,14 +168,14 @@ def train(args):
             log_line += '{} {}'.format(epoch, epoch_losses.get_average())
 
             if val_loader:
-                val_losses = AverageMeter(val_dataset.num_target_channel)
+                val_losses = AverageMeter(1)
                 for val_bid, val_batch in enumerate(val_loader):
                     val_feat, val_target = val_batch
+                    val_target = torch.Tensor.squeeze(val_target, dim=1)
                     optimizer.zero_grad()
-                    val_out = np.squeeze(network(val_feat.to(device)).cpu().detach().numpy(), axis=0)
-                    val_target = np.squeeze(val_target.numpy(), axis=0)
-                    val_loss = np.average((val_out - val_target) * (val_out - val_target), axis=1)
-                    val_losses.add(val_loss)
+                    val_out = network(val_feat.to(device))
+                    val_loss = criterion(val_out, val_target.to(device))
+                    val_losses.add(val_loss.cpu().detach().numpy())
                 log_line += ' {}\n'.format(val_losses.get_average())
                 avg_loss = np.average(val_losses.get_average())
                 print('Validation loss: {}/{}'.format(val_losses.get_average(), avg_loss))
@@ -314,30 +237,32 @@ def test(args):
     model.eval().to(device)
     print('Model %s loaded to device.' % args.model_path, device)
 
-    features_all, targets_all = load_datalist(root_dir, data_list)
+    features_all, targets_all = load_datalist(root_dir, data_list, _feature_column, 'angle_cls',
+                                              feature_sigma=_feature_sigma, target_sigma=_target_sigma)
     assert len(features_all) == len(targets_all)
     for data_id in range(len(features_all)):
         feat = features_all[data_id].astype(np.float32)
-        target = targets_all[data_id].astype(np.float32)
-        predicted = model(torch.Tensor(np.expand_dims(feat.T, axis=0))).cpu().detach().numpy().T
+        target = targets_all[data_id].astype(np.int32)
+        predicted = model(torch.Tensor(np.expand_dims(feat.T, axis=0))).cpu().detach().numpy()
+        predicted = np.squeeze(predicted, axis=0).T
 
-        mse = (predicted - target) * (predicted - target)
-        mse = np.average(mse, axis=0)
-        print('Prediction finished. MSE: %f' % np.average(mse))
-        plt.figure("Prediction for %s" % osp.split(data_list[data_id])[1])
-        for i in range(predicted.shape[1]):
-            plt.subplot(predicted.shape[1] * 100 + 11 + i)
-            plt.plot(target[:, i])
-            plt.plot(predicted[:, i])
-            plt.legend(['GT', 'Predicted'])
-            plt.text(0.5, math.pi * 2, 'MSE: %f' % mse[i])
-        plt.tight_layout()
-        if args.out_dir:
-            plt.savefig(osp.join(args.out_dir, 'predicted_%s.png' % osp.split(data_list[data_id])[1]))
-            plt.close()
-        else:
-            plt.show()
-            plt.close()
+        # mse = (predicted - target) * (predicted - target)
+        # mse = np.average(mse, axis=0)
+        # print('Prediction finished. MSE: %f' % np.average(mse))
+        # plt.figure("Prediction for %s" % osp.split(data_list[data_id])[1])
+        # for i in range(predicted.shape[1]):
+        #     plt.subplot(predicted.shape[1] * 100 + 11 + i)
+        #     plt.plot(target[:, i])
+        #     plt.plot(predicted[:, i])
+        #     plt.legend(['GT', 'Predicted'])
+        #     # plt.text(0.5, math.pi * 2, 'MSE: %f' % mse[i])
+        # plt.tight_layout()
+        # if args.out_dir:
+        #     plt.savefig(osp.join(args.out_dir, 'predicted_%s.png' % osp.split(data_list[data_id])[1]))
+        #     plt.close()
+        # else:
+        #     plt.show()
+        #     plt.close()
 
 
 if __name__ == '__main__':
@@ -349,6 +274,8 @@ if __name__ == '__main__':
     parser.add_argument('--val_list', type=str)
     parser.add_argument('--test_list', type=str, default=None)
     parser.add_argument('--test_path', type=str, default=None)
+    parser.add_argument('--feature_sigma', type=float, default=2.0)
+    parser.add_argument('--target_sigma', type=float, default=10.0)
     parser.add_argument('--model_path', type=str, default=None)
     parser.add_argument('--lr', type=float, default=1e-03)
     parser.add_argument('--window_size', type=int, default=1000)
