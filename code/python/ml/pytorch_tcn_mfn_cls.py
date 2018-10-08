@@ -6,6 +6,7 @@ import numpy as np
 import torch
 
 from torch.utils.data import Dataset, DataLoader
+import math
 
 sys.path.append(osp.join(osp.dirname(osp.abspath(__file__)), '..'))
 
@@ -30,7 +31,7 @@ class IMUMagnetDataset(Dataset):
         with open(list_path) as f:
             data_list = [s.strip().split(',')[0] for s in f.readlines() if s[0] != '#']
         root_dir = osp.dirname(list_path)
-        self.angle_step = 360.0 / _output_channel
+        self.angle_step = math.pi * 2 / _output_channel
         self.features, self.targets = load_datalist(root_dir, data_list, _feature_column, 'angle_cls',
                                                     feature_sigma=_feature_sigma, target_sigma=_target_sigma,
                                                     angle_step=self.angle_step)
@@ -68,7 +69,7 @@ class IMUMagnetSeqDataset(Dataset):
         with open(list_path) as f:
             data_list = [s.strip().split(',')[0] for s in f.readlines() if s[0] != '#']
         root_dir = osp.dirname(list_path)
-        self.angle_step = 360.0 / _output_channel
+        self.angle_step = math.pi * 2 / _output_channel
         self.features, self.targets = load_datalist(root_dir, data_list, _feature_column, 'angle_cls',
                                                     feature_sigma=_feature_sigma, target_sigma=_target_sigma,
                                                     angle_step=self.angle_step)
@@ -227,7 +228,6 @@ def test(args):
     if args.out_dir and not osp.exists(args.out_dir):
         os.makedirs(args.out_dir)
 
-    # device = torch.device('cuda:0' if torch.cuda.is_available() and not args.cpu else 'cpu')
     device = torch.device('cpu')
 
     model = MagnetFusionNetwork(_input_channel, _output_channel, args.kernel_size, _layer_channels)
@@ -237,32 +237,36 @@ def test(args):
     model.eval().to(device)
     print('Model %s loaded to device.' % args.model_path, device)
 
+    angle_step = math.pi * 2 / _output_channel
     features_all, targets_all = load_datalist(root_dir, data_list, _feature_column, 'angle_cls',
-                                              feature_sigma=_feature_sigma, target_sigma=_target_sigma)
+                                              feature_sigma=_feature_sigma, target_sigma=_target_sigma,
+                                              angle_step=angle_step)
+    criterion = torch.nn.CrossEntropyLoss()
     assert len(features_all) == len(targets_all)
     for data_id in range(len(features_all)):
         feat = features_all[data_id].astype(np.float32)
         target = targets_all[data_id].astype(np.int32)
-        predicted = model(torch.Tensor(np.expand_dims(feat.T, axis=0))).cpu().detach().numpy()
-        predicted = np.squeeze(predicted, axis=0).T
+        predicted_prob = model(torch.Tensor(np.expand_dims(feat.T, axis=0)))
 
-        # mse = (predicted - target) * (predicted - target)
-        # mse = np.average(mse, axis=0)
-        # print('Prediction finished. MSE: %f' % np.average(mse))
-        # plt.figure("Prediction for %s" % osp.split(data_list[data_id])[1])
-        # for i in range(predicted.shape[1]):
-        #     plt.subplot(predicted.shape[1] * 100 + 11 + i)
-        #     plt.plot(target[:, i])
-        #     plt.plot(predicted[:, i])
-        #     plt.legend(['GT', 'Predicted'])
-        #     # plt.text(0.5, math.pi * 2, 'MSE: %f' % mse[i])
-        # plt.tight_layout()
-        # if args.out_dir:
-        #     plt.savefig(osp.join(args.out_dir, 'predicted_%s.png' % osp.split(data_list[data_id])[1]))
-        #     plt.close()
-        # else:
-        #     plt.show()
-        #     plt.close()
+        target_tensor = torch.Tensor(target.T).long().to(device)
+        loss = criterion(predicted_prob, target_tensor).cpu().detach().item()
+        print('{}, loss: {}'.format(osp.split(data_list[data_id])[1], loss))
+
+        predicted_cls = np.argmax(predicted_prob.cpu().detach().numpy().T, axis=1)
+        plt.figure("Prediction for %s" % osp.split(data_list[data_id])[1])
+        for i in range(predicted_cls.shape[1]):
+            plt.subplot(predicted_cls.shape[1] * 100 + 11 + i)
+            plt.plot(target[:, i])
+            plt.plot(predicted_cls[:, i])
+            plt.legend(['GT', 'Predicted'])
+            # plt.text(0.5, math.pi * 2, 'MSE: %f' % mse[i])
+        plt.tight_layout()
+        if args.out_dir:
+            plt.savefig(osp.join(args.out_dir, 'predicted_%s.png' % osp.split(data_list[data_id])[1]))
+            plt.close()
+        else:
+            plt.show()
+            plt.close()
 
 
 if __name__ == '__main__':
