@@ -12,12 +12,23 @@ import cv2
 from ml.mfn_data import compute_north_in_tango
 
 
-def map_overlay(img, positions, offset, scale, yaw):
+def map_overlay(img, positions, offset, scale, yaw, ref_dir=None):
     img2 = np.copy(img)
-    rotor = np.array([[math.cos(yaw), -math.sin(yaw)], [math.sin(yaw), math.cos(yaw)]])
-    positions_vis = np.matmul(rotor, positions.T * scale).T + offset
+    yaw -= math.pi / 2
+    rotor = np.array([[math.cos(-yaw), -math.sin(-yaw)], [math.sin(-yaw), math.cos(-yaw)]])
+    positions_vis = np.matmul(rotor, positions.T * scale).T
+    positions_vis[:, 1] *= -1
+    positions_vis += offset
     for i in range(positions_vis.shape[0]):
         cv2.circle(img2, (int(positions_vis[i][0]), int(positions_vis[i][1])), 1, (255, 0, 0))
+    if ref_dir is not None:
+        ref_dir = np.matmul(rotor, ref_dir.T).T
+        ref_dir[1] *= -1
+        north_len = 40.0
+        vtx1 = np.array([img2.shape[1] / 2, img2.shape[0] / 2]).astype(np.int)
+        vtx2 = (vtx1 + ref_dir * north_len).astype(np.int)
+        cv2.line(img2, (vtx1[0], vtx1[1]), (vtx2[0], vtx2[1]), (0, 0, 255), 3)
+        cv2.circle(img2, (vtx1[0], vtx1[1]), 5, (255, 0, 0), 5)
     return img2
 
 
@@ -39,6 +50,8 @@ class AlignmentVisualizer(object):
         self.offset = np.array([self.img_w / 2, self.img_h / 2])
         self.scale = 1.0
         self.yaw = compute_north_in_tango(self.orientations, self.magnets)
+        rotor = np.array([[math.cos(self.yaw), -math.sin(self.yaw)], [math.sin(self.yaw), math.cos(self.yaw)]])
+        self.ref_dir = np.matmul(rotor, np.array([1.0, 0.0])).T
 
         plt.figure(window_name, fig_size)
         self.img_axes = plt.axes([0, 0.2, 1., 0.75])
@@ -95,7 +108,7 @@ class AlignmentVisualizer(object):
         self.widgets['btn_exit'].on_clicked(lambda _: plt.close())
 
     def update(self):
-        vis_img = map_overlay(self.ref_img, self.positions, self.offset, self.scale, self.yaw)
+        vis_img = map_overlay(self.ref_img, self.positions, self.offset, self.scale, self.yaw, self.ref_dir)
         self.img_axes.imshow(vis_img)
 
 
